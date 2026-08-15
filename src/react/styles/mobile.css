@@ -436,3 +436,30 @@ button, input, select, textarea { font: inherit; }
   .mobile-room-nudge button:active{transform:scale(.92);background:#e7e7ee}
   .mobile-selection-sheet{z-index:85!important}
 }
+
+
+/* M7.1: stable tool rail + swipe bottom sheet + reliable selection controls */
+@media(max-width:720px){
+  .mobile-plan-tools{
+    width:64px!important;min-width:64px!important;max-width:64px!important;
+    overflow:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y!important;
+    contain:layout paint;box-sizing:border-box;
+  }
+  .mobile-tools-scroll{
+    width:100%;min-width:0;max-width:100%;overflow-x:hidden!important;overflow-y:auto!important;
+    overscroll-behavior-x:none!important;overscroll-behavior-y:contain!important;touch-action:pan-y!important;
+    -webkit-overflow-scrolling:touch;
+  }
+  .mobile-plan-tools button{width:50px!important;max-width:50px!important;min-width:50px!important;margin-inline:auto!important;overflow:hidden}
+  .mobile-plan-tools button span{display:block;width:100%;max-width:100%;font-size:9.5px!important;line-height:1.05;text-align:center;white-space:normal}
+  .mobile-selection-sheet{transition:transform .2s ease,max-height .2s ease,padding .2s ease;overflow:visible!important}
+  .mobile-selection-sheet.collapsed{left:72px;right:72px;padding:4px 10px 6px;max-height:46px;border-radius:18px}
+  .mobile-sheet-swipe-handle{width:100%;min-height:22px;padding:2px 0;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#5e5c69;touch-action:none}
+  .mobile-sheet-swipe-handle .mobile-sheet-grabber{display:block;margin:0;width:48px;height:5px}
+  .mobile-sheet-swipe-handle strong{max-width:220px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-selection-actions{display:flex;justify-content:flex-end;margin-top:8px}
+  .mobile-delete-selection{min-height:38px;padding:0 14px;border:1px solid rgba(214,55,69,.2);border-radius:11px;background:#fff4f5;color:#c92f40;font-size:11px;font-weight:850;display:flex;align-items:center;gap:6px}
+  .mobile-delete-selection svg{width:16px;height:16px}
+  .mobile-room-nudge{z-index:90!important}
+  .mobile-room-nudge button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+}

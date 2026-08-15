@@ -206,7 +206,7 @@ function DraftPolygonEdge({ points, hoverPoint, p }) {
   </g>;
 }
 
-function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraft, setPolygonDraft, finishPolygon, issues, viewportZoom, onViewportZoom, viewportPan = { x: 0, y: 0 }, onViewportPan }) {
+function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraft, setPolygonDraft, finishPolygon, issues, viewportZoom, onViewportZoom, viewportPan = { x: 0, y: 0 }, onViewportPan, onCreated }) {
   const svgRef = useRef(null);
   const gestureRef = useRef(null);
   const activePointersRef = useRef(new Map());
@@ -218,6 +218,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const [hoverSnap, setHoverSnap] = useState(null);
   const setGesture = (value) => { gestureRef.current = typeof value === 'function' ? value(gestureRef.current) : value; setGestureState(gestureRef.current); };
   const shownPlan = useMemo(() => previewPlan(plan, gesture), [plan, gesture]);
+  const selectCreated = useCallback((selection) => { if (onCreated) onCreated(selection); else setSelected(selection); }, [onCreated, setSelected]);
   // The viewport must stay fixed during a drag; otherwise an outside terrace
   // changes the fitted bounds and the object jumps away from the pointer.
   const layoutPlan = useMemo(() => ({ ...plan, zoom: viewportZoom ?? plan.zoom }), [plan, viewportZoom]);
@@ -268,19 +269,19 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   };
   const addAt = (point, type) => {
     if (type === 'pile') {
-      const id = uid('pile'); commitPlan((next) => next.piles.push({ id, ...point, source: 'manual' })); setSelected({ type: 'pile', id }); return;
+      const id = uid('pile'); commitPlan((next) => next.piles.push({ id, ...point, source: 'manual' })); selectCreated({ type: 'pile', id }); return;
     }
     const segment = nearestSegment(point, allOpeningSegments(plan));
     if (!segment) return;
     const id = uid(type); const common = { id, orientation: segment.axis, outer: segment.outer, x: segment.axis === 'v' ? segment.fixed : segment.projected, y: segment.axis === 'v' ? segment.projected : segment.fixed };
     if (type === 'gap') {
-      commitPlan((next) => next.wallGaps.push({ ...common, width: 1 })); setSelected({ type: 'gap', id });
+      commitPlan((next) => next.wallGaps.push({ ...common, width: 1 })); selectCreated({ type: 'gap', id });
     } else {
       const isGarage = type === 'garage';
       const openingType = isGarage ? 'door' : type;
       const draft = { ...common, type: openingType, width: type === 'window' ? 1.2 : isGarage ? 2.5 : 0.86, height: type === 'window' ? 1.2 : isGarage ? 2.2 : 2.05, doorType: isGarage ? 'garage' : segment.outer ? 'entrance' : 'interior', hinge: 'right', swing: segment.outer ? 'out' : 'in' };
       const opening = isGarage ? projectOpeningToWall(draft, point, plan, { lockDoorType: true }) : draft;
-      commitPlan((next) => next.openings.push(opening)); setSelected({ type: 'opening', id });
+      commitPlan((next) => next.openings.push(opening)); selectCreated({ type: 'opening', id });
     }
   };
   const pointerDownCapture = (event) => {
@@ -355,7 +356,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
             if (current.type === 'room') next.rooms.push(withRoomBounds({ id, name: `Комната ${next.rooms.length + 1}`, points, include: true, bearing: false, ceilingMode: 'flat' }));
             else next.platforms.push(normalizeTerracePlatform({ id, kind: current.type, ...bounds, include: true, steps: 3, stairSide: 'bottom', stairDirection: 'outward', stairWidth: 1.2, tread: 0.3, riser: 0.18 }));
           });
-          setSelected({ type: current.type === 'room' ? 'room' : 'platform', id });
+          selectCreated({ type: current.type === 'room' ? 'room' : 'platform', id });
         }
       } else if (distance >= 0.3) {
         const id = uid(current.type);
@@ -368,7 +369,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
           if (current.type === 'pileRow') next.pileRows.push({ ...line, name: `Ряд ${next.pileRows.length + 1}`, count: Math.max(2, Math.ceil(distance / 2.5) + 1), group: 'house' });
           if (current.type === 'bindingLine') next.bindingLines.push({ ...line, name: `Обвязка ${next.bindingLines.length + 1}`, group: 'house', include: true });
         });
-        setSelected({ type: current.type, id });
+        selectCreated({ type: current.type, id });
       }
     } else {
       const next = previewPlan(plan, finalGesture);
@@ -503,6 +504,9 @@ function MobileStepper({ label, value, onMinus, onPlus, suffix = 'м' }) {
 }
 
 function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const swipeStartRef = useRef(null);
+  useEffect(() => { setCollapsed(false); }, [selected?.type, selected?.id]);
   if (!selected) return null;
   const get = (key) => (plan[key] || []).find((item) => item.id === selected.id);
   const update = (key, mutate) => commitPlan((next) => { const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) mutate(item); });
@@ -512,8 +516,16 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
   const wall = selected.type === 'wall' ? get('walls') : null;
   const binding = selected.type === 'bindingLine' ? get('bindingLines') : null;
   const dimension = selected.type === 'dimension' ? get('dimensions') : null;
+  const pileRow = selected.type === 'pileRow' ? get('pileRows') : null;
+  const pile = selected.type === 'pile' ? get('piles') : null;
   const gap = selected.type === 'gap' ? get('wallGaps') : null;
   const step = .1;
+  const keyForSelection = () => selected.type === 'room' ? 'rooms' : selected.type === 'platform' ? 'platforms' : selected.type === 'opening' ? 'openings' : selected.type === 'wall' ? 'walls' : selected.type === 'dimension' ? 'dimensions' : selected.type === 'pileRow' ? 'pileRows' : selected.type === 'bindingLine' ? 'bindingLines' : selected.type === 'gap' ? 'wallGaps' : 'piles';
+  const deleteSelected = () => {
+    const key = keyForSelection();
+    commitPlan((next) => { next[key] = (next[key] || []).filter((item) => item.id !== selected.id); });
+    setSelected(null);
+  };
   const resizeRoom = (axis, delta) => {
     if (!room) return;
     update('rooms', (item) => {
@@ -526,36 +538,52 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
     const dx = line.x2 - line.x1; const dy = line.y2 - line.y1; const len = Math.max(.01, Math.hypot(dx, dy)); const next = Math.max(.1, len + delta);
     line.x2 = roundCoord(line.x1 + dx / len * next); line.y2 = roundCoord(line.y1 + dy / len * next);
   });
-  const moveRoomStep = (dx, dy) => {
-    if (!room) return;
-    commitPlan((next) => {
-      const item = (next.rooms || []).find((candidate) => candidate.id === room.id); if (!item) return;
-      const b = boundsOf(roomPoints(item)); const margin = Math.max(0, Number(next.wallThickness) || 0);
-      const others = (next.rooms || []).filter((candidate) => candidate.id !== item.id).map((candidate) => boundsOf(roomPoints(candidate)));
-      let moveX = dx, moveY = dy;
-      const overlapY = (a, c) => Math.min(a.y2, c.y2) - Math.max(a.y, c.y) > 0.03;
-      const overlapX = (a, c) => Math.min(a.x2, c.x2) - Math.max(a.x, c.x) > 0.03;
-      if (dx > 0) {
-        let limit = (next.house.w - margin) - b.x2;
-        for (const o of others) if (overlapY(b,o) && o.x >= b.x2 - 0.001) limit = Math.min(limit, Math.max(0, o.x - b.x2));
-        moveX = Math.max(0, Math.min(dx, limit));
-      } else if (dx < 0) {
-        let limit = b.x - margin;
-        for (const o of others) if (overlapY(b,o) && o.x2 <= b.x + 0.001) limit = Math.min(limit, Math.max(0, b.x - o.x2));
-        moveX = -Math.max(0, Math.min(-dx, limit));
-      }
-      if (dy > 0) {
-        let limit = (next.house.h - margin) - b.y2;
-        for (const o of others) if (overlapX(b,o) && o.y >= b.y2 - 0.001) limit = Math.min(limit, Math.max(0, o.y - b.y2));
-        moveY = Math.max(0, Math.min(dy, limit));
-      } else if (dy < 0) {
-        let limit = b.y - margin;
-        for (const o of others) if (overlapX(b,o) && o.y2 <= b.y + 0.001) limit = Math.min(limit, Math.max(0, b.y - o.y2));
-        moveY = -Math.max(0, Math.min(-dy, limit));
-      }
-      item.points = roomPoints(item).map((point) => ({ x: roundCoord(point.x + moveX), y: roundCoord(point.y + moveY) })); Object.assign(item, boundsOf(item.points));
-    });
+  const moveRoomExact = (next, item, dx, dy) => {
+    const b = boundsOf(roomPoints(item)); const margin = Math.max(0, Number(next.wallThickness) || 0);
+    const others = (next.rooms || []).filter((candidate) => candidate.id !== item.id).map((candidate) => boundsOf(roomPoints(candidate)));
+    let moveX = dx, moveY = dy;
+    const overlapY = (a, c) => Math.min(a.y2, c.y2) - Math.max(a.y, c.y) > 0.03;
+    const overlapX = (a, c) => Math.min(a.x2, c.x2) - Math.max(a.x, c.x) > 0.03;
+    if (dx > 0) {
+      let limit = (next.house.w - margin) - b.x2;
+      for (const o of others) if (overlapY(b,o) && o.x >= b.x2 - 0.001) limit = Math.min(limit, Math.max(0, o.x - b.x2));
+      moveX = Math.max(0, Math.min(dx, limit));
+    } else if (dx < 0) {
+      let limit = b.x - margin;
+      for (const o of others) if (overlapY(b,o) && o.x2 <= b.x + 0.001) limit = Math.min(limit, Math.max(0, b.x - o.x2));
+      moveX = -Math.max(0, Math.min(-dx, limit));
+    }
+    if (dy > 0) {
+      let limit = (next.house.h - margin) - b.y2;
+      for (const o of others) if (overlapX(b,o) && o.y >= b.y2 - 0.001) limit = Math.min(limit, Math.max(0, o.y - b.y2));
+      moveY = Math.max(0, Math.min(dy, limit));
+    } else if (dy < 0) {
+      let limit = b.y - margin;
+      for (const o of others) if (overlapX(b,o) && o.y2 <= b.y + 0.001) limit = Math.min(limit, Math.max(0, b.y - o.y2));
+      moveY = -Math.max(0, Math.min(-dy, limit));
+    }
+    item.points = roomPoints(item).map((point) => ({ x: roundCoord(point.x + moveX), y: roundCoord(point.y + moveY) })); Object.assign(item, boundsOf(item.points));
   };
+  const nudgeSelected = (dx, dy) => commitPlan((next) => {
+    if (selected.type === 'room') {
+      const item = (next.rooms || []).find((candidate) => candidate.id === selected.id); if (item) moveRoomExact(next, item, dx, dy); return;
+    }
+    if (selected.type === 'opening') {
+      const item = (next.openings || []).find((candidate) => candidate.id === selected.id); if (!item) return;
+      const target = { x: roundCoord(item.x + dx), y: roundCoord(item.y + dy) };
+      Object.assign(item, projectOpeningToWall(item, target, next, { lockDoorType: item.doorType === 'garage' })); return;
+    }
+    if (selected.type === 'platform') {
+      const item = (next.platforms || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); } return;
+    }
+    if (selected.type === 'pile' || selected.type === 'gap') {
+      const key = selected.type === 'pile' ? 'piles' : 'wallGaps'; const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); } return;
+    }
+    const key = selected.type === 'wall' ? 'walls' : selected.type === 'bindingLine' ? 'bindingLines' : selected.type === 'dimension' ? 'dimensions' : selected.type === 'pileRow' ? 'pileRows' : null;
+    if (key) {
+      const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x1 = roundCoord(item.x1 + dx); item.y1 = roundCoord(item.y1 + dy); item.x2 = roundCoord(item.x2 + dx); item.y2 = roundCoord(item.y2 + dy); }
+    }
+  });
   let title = 'Элемент'; let controls = null;
   if (room) {
     const b = boundsOf(roomPoints(room)); title = `Комната · ${room.name}`;
@@ -566,14 +594,27 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
   } else if (platform) {
     title = platform.kind === 'porch' ? 'Крыльцо' : 'Терраса';
     controls = <><MobileStepper label="Ширина" value={platform.w} onMinus={() => update('platforms', (i) => { i.w = Math.max(.5, roundCoord(i.w - step)); })} onPlus={() => update('platforms', (i) => { i.w = roundCoord(i.w + step); })} /><MobileStepper label="Длина" value={platform.h} onMinus={() => update('platforms', (i) => { i.h = Math.max(.5, roundCoord(i.h - step)); })} onPlus={() => update('platforms', (i) => { i.h = roundCoord(i.h + step); })} /></>;
-  } else if (wall || binding || dimension) {
-    const item = wall || binding || dimension; const key = wall ? 'walls' : binding ? 'bindingLines' : 'dimensions';
-    title = wall ? 'Перегородка' : binding ? 'Обвязка' : 'Размер'; const length = Math.hypot(item.x2-item.x1,item.y2-item.y1);
+  } else if (wall || binding || dimension || pileRow) {
+    const item = wall || binding || dimension || pileRow; const key = wall ? 'walls' : binding ? 'bindingLines' : dimension ? 'dimensions' : 'pileRows';
+    title = wall ? 'Перегородка' : binding ? 'Обвязка' : dimension ? 'Размер' : 'Ряд свай'; const length = Math.hypot(item.x2-item.x1,item.y2-item.y1);
     controls = <MobileStepper label="Длина" value={length} onMinus={() => resizeLine(key, -step)} onPlus={() => resizeLine(key, step)} />;
   } else if (gap) {
     title = 'Разрыв стены'; controls = <MobileStepper label="Ширина" value={gap.width} onMinus={() => update('wallGaps', (i) => { i.width = Math.max(.1, roundCoord(i.width-step)); })} onPlus={() => update('wallGaps', (i) => { i.width = roundCoord(i.width+step); })} />;
-  }
-  return <><section className="mobile-selection-sheet"><div className="mobile-sheet-grabber" /><header><strong>{title}</strong><button type="button" onClick={() => setSelected(null)}><X /></button></header><div className="mobile-stepper-grid">{controls}</div><details className="mobile-selection-more"><summary>Все параметры <ChevronDown /></summary><div className="mobile-selection-inspector"><Inspector plan={plan} selected={selected} commitPlan={commitPlan} issues={[]} setSelected={setSelected} /></div></details><small>Шаг кнопок: 10 см · у стены последний шаг автоматически уменьшается до точного касания</small></section>{room ? <div className="mobile-room-nudge" aria-label="Перемещение комнаты по 10 сантиметров"><button className="up" onClick={() => moveRoomStep(0,-step)}>↑</button><button className="left" onClick={() => moveRoomStep(-step,0)}>←</button><button className="center" disabled>•</button><button className="right" onClick={() => moveRoomStep(step,0)}>→</button><button className="down" onClick={() => moveRoomStep(0,step)}>↓</button></div> : null}</>;
+  } else if (pile) title = 'Свая';
+  const canNudge = Boolean(room || opening || wall || binding || dimension || pileRow || platform || pile || gap);
+  const beginSwipe = (event) => { swipeStartRef.current = event.clientY; event.currentTarget.setPointerCapture?.(event.pointerId); };
+  const endSwipe = (event) => {
+    if (swipeStartRef.current == null) return;
+    const delta = event.clientY - swipeStartRef.current; swipeStartRef.current = null;
+    if (delta > 35) setCollapsed(true); else if (delta < -25) setCollapsed(false);
+  };
+  return <>
+    <section className={`mobile-selection-sheet ${collapsed ? 'collapsed' : ''}`}>
+      <button className="mobile-sheet-swipe-handle" type="button" onPointerDown={beginSwipe} onPointerUp={endSwipe} onClick={() => collapsed && setCollapsed(false)} aria-label={collapsed ? 'Показать настройки выбранного элемента' : 'Скрыть настройки выбранного элемента'}><span className="mobile-sheet-grabber" />{collapsed ? <strong>{title}</strong> : null}</button>
+      {!collapsed ? <><header><strong>{title}</strong><button type="button" onClick={() => setSelected(null)}><X /></button></header><div className="mobile-stepper-grid">{controls}</div><div className="mobile-selection-actions"><button className="mobile-delete-selection" type="button" onClick={deleteSelected}><Trash2 />Удалить</button></div><details className="mobile-selection-more"><summary>Все параметры <ChevronDown /></summary><div className="mobile-selection-inspector"><Inspector plan={plan} selected={selected} commitPlan={commitPlan} issues={[]} setSelected={setSelected} /></div></details><small>Шаг стрелок: 10 см · свайп вниз скрывает панель</small></> : null}
+    </section>
+    {canNudge ? <div className="mobile-room-nudge" aria-label="Перемещение выбранного элемента по 10 сантиметров"><button className="up" type="button" onClick={() => nudgeSelected(0,-step)}>↑</button><button className="left" type="button" onClick={() => nudgeSelected(-step,0)}>←</button><button className="center" type="button" disabled>•</button><button className="right" type="button" onClick={() => nudgeSelected(step,0)}>→</button><button className="down" type="button" onClick={() => nudgeSelected(0,step)}>↓</button></div> : null}
+  </>;
 }
 
 export default function PlanScreen({ onNavigate }) {
@@ -602,6 +643,7 @@ export default function PlanScreen({ onNavigate }) {
     { id: 'empty', name: 'Новый чистый план', plan: createEmptyPlan() }, ...customSketches
   ], [customSketches]);
   const selectTool = (id) => { setTool(id); if (id !== 'polygon') setPolygonDraft([]); if (id === 'bindingLine' && plan.showBinding === false) commitPlan((next) => { next.showBinding = true; }); };
+  const handleCreated = useCallback((selection) => { setSelected(selection); setTool('select'); setPolygonDraft([]); }, []);
   const finishPolygon = () => {
     if (polygonDraft.length < 3 || polygonArea(polygonDraft) < .25) return;
     const id = uid('room'); commitPlan((next) => next.rooms.push(withRoomBounds({ id, name: `Комната ${next.rooms.length + 1}`, points: polygonDraft, include: true, bearing: false, ceilingMode: 'flat' })));
@@ -689,7 +731,7 @@ export default function PlanScreen({ onNavigate }) {
       <details className="mobile-view-menu"><summary><Layers3 /><span>Вид</span><ChevronDown /></summary><div><button className="active" type="button"><Check />План</button><button type="button" onClick={() => openVisualMode('3d')}><Box />3D</button><button type="button" onClick={() => openVisualMode('frame')}><Hammer />Каркас</button><button type="button" onClick={() => openVisualMode('sip')}><Layers3 />СИП</button><button type="button" onClick={() => openVisualMode('roof')}><Home />Кровля</button></div></details>
     </div>
     <aside className="mobile-plan-tools"><div className="mobile-select-fixed"><button type="button" className={tool==='select'?'active':''} onClick={() => selectTool('select')}><MousePointer2 /><span>Выбор</span></button></div><div className="mobile-tools-scroll">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</div></aside>
-    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} viewportPan={viewportPan} onViewportPan={setViewportPan} /><div className="mobile-pinch-tip">Два пальца: масштаб и перемещение · до 2000%</div></div>
+    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} viewportPan={viewportPan} onViewportPan={setViewportPan} onCreated={handleCreated} /><div className="mobile-pinch-tip">Два пальца: масштаб и перемещение · до 2000%</div></div>
     {bindingSetupOpen ? <section className="mobile-binding-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автообвязка</strong><small>2 ряда = только крайние линии</small></div><button type="button" onClick={() => setBindingSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Вертикальных рядов" value={bindingVerticalRows} suffix="шт" onMinus={() => setBindingVerticalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingVerticalRows((v) => Math.min(24, Math.round(v)+1))} /><MobileStepper label="Горизонтальных рядов" value={bindingHorizontalRows} suffix="шт" onMinus={() => setBindingHorizontalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingHorizontalRows((v) => Math.min(24, Math.round(v)+1))} /></div><button className="button primary mobile-binding-apply" type="button" onClick={autoBinding}><Sparkles />Построить обвязку</button><p>Ряды распределяются равномерно. После построения любую линию можно поправить вручную.</p></section> : null}
     <MobileSelectionAdjuster plan={plan} selected={selected} commitPlan={commitPlan} setSelected={setSelected} />
   </div>;
