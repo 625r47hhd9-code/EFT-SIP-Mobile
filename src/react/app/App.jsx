@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import {
   Calculator, ChevronLeft, ChevronRight, FilePlus2, FileUp, History, Home,
+  LayoutTemplate,
   Layers3, Moon, MoreHorizontal, PackageOpen, Ruler, Save, Scissors,
   Settings2, Sun, Tags, Truck, X, Hammer, PanelTop, Trees, PaintRoller,
   HardHat, Check, RotateCcw, Box
@@ -11,6 +12,7 @@ import {
   createProjectWithCurrentPrices, migrateProject, REACT_BACKUPS_KEY, REACT_PROJECT_VERSION
 } from '../state/project-model.js';
 import { formatMoney } from '../utils/format.js';
+import { PROJECT_TEMPLATES, applyProjectTemplate } from '../data/project-templates.js';
 
 const PlanScreen = lazy(() => import('../screens/PlanScreen.jsx'));
 const ParametersScreen = lazy(() => import('../screens/ParametersScreen.jsx'));
@@ -141,11 +143,66 @@ function ActionSheet({ open, onClose, actions, theme, canUndo, canRedo }) {
           <button onClick={actions.redo} disabled={!canRedo}><ChevronRight /><span>Повторить</span></button>
           <button onClick={actions.theme}>{theme === 'light' ? <Moon /> : <Sun />}<span>{theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}</span></button>
           <button onClick={actions.settings}><Settings2 /><span>Связи расчётов</span></button>
+          <button onClick={actions.templates}><LayoutTemplate /><span>Шаблоны домов</span></button>
           <button onClick={actions.newProject}><FilePlus2 /><span>Новый проект</span></button>
           <button onClick={actions.save}><Save /><span>Сохранить</span></button>
           <button onClick={actions.open}><FileUp /><span>Открыть файл</span></button>
           <button onClick={actions.backups}><History /><span>Резервные копии</span></button>
         </div>
+      </section>
+    </div>
+  );
+}
+
+
+function TemplatePreview({ plan }) {
+  const w = Number(plan?.house?.w) || 10;
+  const h = Number(plan?.house?.h) || 8;
+  const scale = Math.min(220 / w, 150 / h);
+  const ox = (240 - w * scale) / 2;
+  const oy = (170 - h * scale) / 2;
+  const points = (room) => (room.points || []).map((p) => `${ox + p.x * scale},${oy + p.y * scale}`).join(' ');
+  return (
+    <svg viewBox="0 0 240 170" className="template-plan-preview" aria-hidden="true">
+      <rect x={ox} y={oy} width={w * scale} height={h * scale} rx="2" className="template-house-outline" />
+      {(plan?.rooms || []).map((room) => <polygon key={room.id} points={points(room)} className="template-room" />)}
+      {(plan?.openings || []).filter((item) => item.outer).map((item) => {
+        const x = ox + Number(item.x || 0) * scale; const y = oy + Number(item.y || 0) * scale;
+        return <circle key={item.id} cx={x} cy={y} r="2.5" className={item.type === 'door' ? 'template-door' : 'template-window'} />;
+      })}
+    </svg>
+  );
+}
+
+function TemplatesModal({ open, onClose, onApply }) {
+  const [selected, setSelected] = useState(PROJECT_TEMPLATES[0]?.id);
+  if (!open) return null;
+  const active = PROJECT_TEMPLATES.find((item) => item.id === selected) || PROJECT_TEMPLATES[0];
+  return (
+    <div className="mobile-sheet-backdrop template-backdrop" onMouseDown={onClose}>
+      <section className="mobile-template-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Шаблоны домов">
+        <div className="sheet-handle" />
+        <header className="template-modal-header">
+          <div><span className="eyebrow">Библиотека ЭФТ</span><strong>Выберите шаблон дома</strong><small>Планировка и конструктивные настройки загрузятся вместе.</small></div>
+          <button onClick={onClose} aria-label="Закрыть"><X /></button>
+        </header>
+        <div className="template-card-scroll">
+          {PROJECT_TEMPLATES.map((template) => (
+            <button key={template.id} className={`project-template-card ${selected === template.id ? 'active' : ''}`} onClick={() => setSelected(template.id)}>
+              <div className="template-preview-wrap"><TemplatePreview plan={template.transfer.plan} /><span className="template-tag">{template.tag}</span></div>
+              <div className="template-card-copy">
+                <div><strong>{template.name}</strong><span>{template.subtitle}</span></div>
+                <p>{template.description}</p>
+                <div className="template-facts">{template.facts.map((fact) => <span key={fact}>{fact}</span>)}</div>
+              </div>
+              <span className="template-select-indicator">{selected === template.id ? <Check size={18} /> : null}</span>
+            </button>
+          ))}
+        </div>
+        <footer className="template-modal-footer">
+          <div><span>Будет загружен</span><strong>{active?.name}</strong><small>Цены текущего проекта сохранятся.</small></div>
+          <button className="template-apply-button" onClick={() => onApply(active)}>Загрузить шаблон</button>
+        </footer>
       </section>
     </div>
   );
@@ -179,6 +236,7 @@ export function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('eft-react-theme') || 'light');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [notice, setNotice] = useState('Автосохранение включено');
   const fileRef = useRef(null);
   const calculation = useMemo(() => calculateProject(project), [project]);
@@ -246,7 +304,7 @@ export function App() {
     <div className="app mobile-app-shell" data-theme={theme}>
       <header className="mobile-topbar">
         <div className="mobile-topbar-main">
-          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · v{REACT_PROJECT_VERSION}</span><strong>{projectName}</strong></div>
+          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M4 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
           <button className="mobile-more-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /></button>
         </div>
         <div className="mobile-total-strip">
@@ -294,10 +352,24 @@ export function App() {
           redo: () => { redo(); setSheetOpen(false); },
           theme: changeTheme,
           settings: () => { setActive('calculation-settings'); setSection('home'); setSheetOpen(false); },
+          templates: () => { setSheetOpen(false); setTemplatesOpen(true); },
           newProject,
           save: saveProject,
           open: () => { setSheetOpen(false); fileRef.current?.click(); },
           backups: () => { setSheetOpen(false); setBackupOpen(true); }
+        }}
+      />
+
+      <TemplatesModal
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onApply={(template) => {
+          checkpoint();
+          replace(applyProjectTemplate(project, template));
+          setTemplatesOpen(false);
+          setSection('home');
+          setActive('plan');
+          setNotice(`Загружен шаблон: ${template.name}`);
         }}
       />
 

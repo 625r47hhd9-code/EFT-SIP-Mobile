@@ -1,0 +1,712 @@
+{
+  "format": "eft-house-plan",
+  "schemaVersion": 1,
+  "appVersion": 72,
+  "savedAt": "2026-08-14T13:29:57.823Z",
+  "sourceProject": "0003 (70 м2 )",
+  "plan": {
+    "house": {
+      "w": 7,
+      "h": 10
+    },
+    "wallHeight": 2.5,
+    "wallThickness": 0.174,
+    "partitionThickness": 0.1,
+    "zoom": 120,
+    "showPiles": false,
+    "showBinding": false,
+    "showDimensions": false,
+    "rooms": [
+      {
+        "id": "room-mssm90bf-sc50",
+        "name": "Спальня 1",
+        "points": [
+          {
+            "x": 0.174,
+            "y": 6.774
+          },
+          {
+            "x": 3.4,
+            "y": 6.774
+          },
+          {
+            "x": 3.4,
+            "y": 9.826
+          },
+          {
+            "x": 0.174,
+            "y": 9.826
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 0.174,
+        "y": 6.774,
+        "x2": 3.4,
+        "y2": 9.826,
+        "w": 3.226,
+        "h": 3.0520000000000005
+      },
+      {
+        "id": "room-mssm9k13-qfka",
+        "name": "Спальня 2",
+        "points": [
+          {
+            "x": 3.4,
+            "y": 6.774
+          },
+          {
+            "x": 6.826,
+            "y": 6.774
+          },
+          {
+            "x": 6.826,
+            "y": 9.826
+          },
+          {
+            "x": 3.4,
+            "y": 9.826
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 3.4,
+        "y": 6.774,
+        "x2": 6.826,
+        "y2": 9.826,
+        "w": 3.4259999999999997,
+        "h": 3.0520000000000005
+      },
+      {
+        "id": "room-mssmaa4b-fzng",
+        "name": "Котельная",
+        "points": [
+          {
+            "x": 4.5,
+            "y": 5.2
+          },
+          {
+            "x": 6.826,
+            "y": 5.2
+          },
+          {
+            "x": 6.826,
+            "y": 6.774
+          },
+          {
+            "x": 4.5,
+            "y": 6.774
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 4.5,
+        "y": 5.2,
+        "x2": 6.826,
+        "y2": 6.774,
+        "w": 2.3259999999999996,
+        "h": 1.5739999999999998
+      },
+      {
+        "id": "room-mssmakz2-88l8",
+        "name": "С/У",
+        "points": [
+          {
+            "x": 4.5,
+            "y": 3.174
+          },
+          {
+            "x": 6.826,
+            "y": 3.174
+          },
+          {
+            "x": 6.826,
+            "y": 5.2
+          },
+          {
+            "x": 4.5,
+            "y": 5.2
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 4.5,
+        "y": 3.174,
+        "x2": 6.826,
+        "y2": 5.2,
+        "w": 2.3259999999999996,
+        "h": 2.0260000000000002
+      },
+      {
+        "id": "room-mssmazfh-h77d",
+        "name": "Кухня",
+        "points": [
+          {
+            "x": 4.5,
+            "y": 0.174
+          },
+          {
+            "x": 6.826,
+            "y": 0.174
+          },
+          {
+            "x": 6.826,
+            "y": 3.174
+          },
+          {
+            "x": 4.5,
+            "y": 3.174
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 4.5,
+        "y": 0.174,
+        "x2": 6.826,
+        "y2": 3.174,
+        "w": 2.3259999999999996,
+        "h": 3
+      },
+      {
+        "id": "room-mssmb4my-lryf",
+        "name": "Гостиная",
+        "points": [
+          {
+            "x": 0.174,
+            "y": 0.174
+          },
+          {
+            "x": 4.5,
+            "y": 0.174
+          },
+          {
+            "x": 4.5,
+            "y": 4.174
+          },
+          {
+            "x": 0.174,
+            "y": 4.174
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 0.174,
+        "y": 0.174,
+        "x2": 4.5,
+        "y2": 4.174,
+        "w": 4.326,
+        "h": 4
+      },
+      {
+        "id": "room-msspgcvh-emom",
+        "name": "коридор-холл",
+        "points": [
+          {
+            "x": 0.174,
+            "y": 4.174
+          },
+          {
+            "x": 4.5,
+            "y": 4.174
+          },
+          {
+            "x": 4.5,
+            "y": 6.774
+          },
+          {
+            "x": 0.174,
+            "y": 6.774
+          }
+        ],
+        "include": true,
+        "bearing": false,
+        "ceilingMode": "flat",
+        "x": 0.174,
+        "y": 4.174,
+        "x2": 4.5,
+        "y2": 6.774,
+        "w": 4.326,
+        "h": 2.5999999999999996
+      }
+    ],
+    "walls": [
+      {
+        "id": "wall-mssml2w7-dyd8",
+        "x1": 3.4,
+        "y1": 0.174,
+        "x2": 3.4,
+        "y2": 1.2,
+        "bearing": false
+      }
+    ],
+    "wallGaps": [
+      {
+        "id": "gap-mssnho3j-47wh",
+        "orientation": "v",
+        "outer": false,
+        "x": 4.5,
+        "y": 1.6,
+        "width": 3
+      },
+      {
+        "id": "gap-msspi4dm-qioi",
+        "orientation": "h",
+        "outer": false,
+        "x": 3,
+        "y": 4.174,
+        "width": 2.85
+      }
+    ],
+    "openings": [
+      {
+        "id": "door-mssm958h-2qjq",
+        "orientation": "h",
+        "outer": false,
+        "x": 2.8,
+        "y": 6.774,
+        "type": "door",
+        "width": 0.86,
+        "height": 2.05,
+        "doorType": "interior",
+        "hinge": "right",
+        "swing": "in"
+      },
+      {
+        "id": "door-mssm9qtn-qvry",
+        "orientation": "h",
+        "outer": false,
+        "x": 4,
+        "y": 6.774,
+        "type": "door",
+        "width": 0.86,
+        "height": 2.05,
+        "doorType": "interior",
+        "hinge": "left",
+        "swing": "in"
+      },
+      {
+        "id": "door-mssmbfro-le5d",
+        "orientation": "v",
+        "outer": false,
+        "x": 4.5,
+        "y": 5.7,
+        "type": "door",
+        "width": 0.8,
+        "height": 2.05,
+        "doorType": "interior",
+        "hinge": "left",
+        "swing": "in"
+      },
+      {
+        "id": "door-mssmcbck-cg40",
+        "orientation": "v",
+        "outer": false,
+        "x": 4.5,
+        "y": 4.7,
+        "type": "door",
+        "width": 0.8,
+        "height": 2.05,
+        "doorType": "interior",
+        "hinge": "right",
+        "swing": "in"
+      },
+      {
+        "id": "door-mssme5cz-4ks6",
+        "orientation": "v",
+        "outer": true,
+        "x": 0,
+        "y": 6,
+        "type": "door",
+        "width": 0.86,
+        "height": 2.05,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      },
+      {
+        "id": "window-mssmng4l-1m99",
+        "orientation": "v",
+        "outer": true,
+        "x": 0,
+        "y": 1.3,
+        "type": "window",
+        "width": 1.2,
+        "height": 1.2,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      },
+      {
+        "id": "window-mssn2hyh-y475",
+        "orientation": "h",
+        "outer": true,
+        "x": 5.2,
+        "y": 10,
+        "type": "window",
+        "width": 1.2,
+        "height": 1.2,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      },
+      {
+        "id": "window-mssn2ld2-co4v",
+        "orientation": "h",
+        "outer": true,
+        "x": 1.8,
+        "y": 10,
+        "type": "window",
+        "width": 1.2,
+        "height": 1.2,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      },
+      {
+        "id": "window-mssn2sqr-dkdv",
+        "orientation": "v",
+        "outer": true,
+        "x": 7,
+        "y": 4.174,
+        "type": "window",
+        "width": 0.8,
+        "height": 1.2,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      },
+      {
+        "id": "window-mssn5saq-grg1",
+        "orientation": "v",
+        "outer": true,
+        "x": 7,
+        "y": 6,
+        "type": "window",
+        "width": 0.8,
+        "height": 1.2,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      },
+      {
+        "id": "window-mssnb7p8-18fc",
+        "orientation": "h",
+        "outer": true,
+        "x": 4.3,
+        "y": 0,
+        "type": "window",
+        "width": 1.2,
+        "height": 1.2,
+        "doorType": "entrance",
+        "hinge": "right",
+        "swing": "out"
+      }
+    ],
+    "dimensions": [],
+    "platforms": [
+      {
+        "id": "porch-mssmdevr-g5gs",
+        "kind": "porch",
+        "x": -1.8,
+        "y": 5,
+        "x2": 0,
+        "y2": 6.774,
+        "w": 1.8,
+        "h": 2.5999999999999996,
+        "include": true,
+        "steps": 3,
+        "stairSide": "top",
+        "stairDirection": "outward",
+        "stairWidth": 1.2,
+        "tread": 0.3,
+        "riser": 0.18,
+        "foundation": {
+          "mode": "none"
+        },
+        "binding": {
+          "mode": "none"
+        },
+        "roof": {
+          "mode": "cold",
+          "shape": "shed",
+          "areaMode": "auto",
+          "manualArea": 0,
+          "frontOverhang": 0.3,
+          "sideOverhang": 0.3,
+          "highHeight": 2.6,
+          "lowHeight": 2.2,
+          "ridgeHeight": 0.8,
+          "gableType": "auto",
+          "gableCount": 1,
+          "postSection": "auto",
+          "wastePercent": 10
+        }
+      }
+    ],
+    "piles": [],
+    "pileRows": [
+      {
+        "id": "auto-top",
+        "name": "Авто · верх",
+        "x1": 0,
+        "y1": 0,
+        "x2": 7,
+        "y2": 0,
+        "count": 4,
+        "group": "house",
+        "auto": true
+      },
+      {
+        "id": "auto-right",
+        "name": "Авто · справа",
+        "x1": 7,
+        "y1": 0,
+        "x2": 7,
+        "y2": 10,
+        "count": 5,
+        "group": "house",
+        "auto": true
+      },
+      {
+        "id": "auto-bottom",
+        "name": "Авто · низ",
+        "x1": 0,
+        "y1": 10,
+        "x2": 7,
+        "y2": 10,
+        "count": 4,
+        "group": "house",
+        "auto": true
+      },
+      {
+        "id": "auto-left",
+        "name": "Авто · слева",
+        "x1": 0,
+        "y1": 0,
+        "x2": 0,
+        "y2": 10,
+        "count": 5,
+        "group": "house",
+        "auto": true
+      },
+      {
+        "id": "pileRow-msslhj2h-jb8k",
+        "x1": 4.7,
+        "y1": 0,
+        "x2": 4.7,
+        "y2": 10,
+        "name": "Ряд 5",
+        "count": 5,
+        "group": "house"
+      },
+      {
+        "id": "pileRow-msslhr9a-ev7y",
+        "x1": 2.3,
+        "y1": 0,
+        "x2": 2.3,
+        "y2": 10,
+        "name": "Ряд 6",
+        "count": 5,
+        "group": "house"
+      },
+      {
+        "id": "pileRow-msspaqgn-99s3",
+        "x1": -1.8,
+        "y1": 5,
+        "x2": -1.8,
+        "y2": 7.6,
+        "name": "Ряд 7",
+        "count": 2,
+        "group": "house"
+      }
+    ],
+    "bindingLines": [
+      {
+        "id": "bindingLine-mssli0lz-z8hc",
+        "x1": 0,
+        "y1": 0,
+        "x2": 7,
+        "y2": 0,
+        "name": "Обвязка 1",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-mssli4bh-zaxi",
+        "x1": 7,
+        "y1": 0,
+        "x2": 7,
+        "y2": 10,
+        "name": "Обвязка 2",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-msslibfd-kwqy",
+        "x1": 7,
+        "y1": 10,
+        "x2": 0,
+        "y2": 10,
+        "name": "Обвязка 3",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-mssliflz-07dd",
+        "x1": 0,
+        "y1": 10,
+        "x2": 0,
+        "y2": 0,
+        "name": "Обвязка 4",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-mssliwol-3rsx",
+        "x1": 0,
+        "y1": 2.5,
+        "x2": 7,
+        "y2": 2.5,
+        "name": "Обвязка 5",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-msslj4pd-sab7",
+        "x1": 0,
+        "y1": 5,
+        "x2": 7,
+        "y2": 5,
+        "name": "Обвязка 6",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-mssljcij-va12",
+        "x1": 0,
+        "y1": 7.5,
+        "x2": 7,
+        "y2": 7.5,
+        "name": "Обвязка 7",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-mssljgfm-mx2l",
+        "x1": 2.3,
+        "y1": 10,
+        "x2": 2.3,
+        "y2": 0,
+        "name": "Обвязка 8",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-mssljjfl-rtn4",
+        "x1": 4.7,
+        "y1": 0,
+        "x2": 4.7,
+        "y2": 10,
+        "name": "Обвязка 9",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-msspaywp-09bi",
+        "x1": 0,
+        "y1": 5,
+        "x2": -1.8,
+        "y2": 5,
+        "name": "Обвязка 10",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-msspb1fb-jhlv",
+        "x1": -1.8,
+        "y1": 5,
+        "x2": -1.8,
+        "y2": 7.6,
+        "name": "Обвязка 11",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-msspb4m6-ijy4",
+        "x1": -1.8,
+        "y1": 7.6,
+        "x2": 0,
+        "y2": 7.6,
+        "name": "Обвязка 12",
+        "group": "house",
+        "include": true
+      },
+      {
+        "id": "bindingLine-msspbc76-s5s5",
+        "x1": -1.8,
+        "y1": 6.2,
+        "x2": 0,
+        "y2": 6.2,
+        "name": "Обвязка 13",
+        "group": "house",
+        "include": true
+      }
+    ]
+  },
+  "settings": {
+    "piles": {
+      "spacing": 2.5,
+      "boardVolumePerMeter": 0.0225,
+      "bindingLayers": 3,
+      "bindingBoardWidthMm": 50,
+      "bindingBoardHeightMm": 150,
+      "boardStockLength": 6
+    },
+    "sip": {
+      "floorThickness": "224",
+      "wallThickness": "174",
+      "ceilingThickness": "174",
+      "floorPanelWidth": "0.625",
+      "ceilingPanelWidth": "1.25",
+      "connectorType": "board-pack",
+      "wastePercent": 5
+    },
+    "roof": {
+      "shape": "gable",
+      "type": "combo",
+      "ridgeHeight": 1.8,
+      "ridgeLength": 9.66,
+      "wastePercent": 10,
+      "warmPercent": 30,
+      "eaveOverhang": 0.5,
+      "gableOverhang": 0.3,
+      "structureMode": "manual",
+      "rafterSystem": "hanging",
+      "rafterStep": 0.7,
+      "rafterSection": "50x150",
+      "lathStep": 0.6,
+      "includeEaveTrim": false,
+      "includeVergeTrim": false,
+      "includeRidgeSeal": false,
+      "includeGutter": false,
+      "gableType": "sip",
+      "gableCount": 2
+    }
+  },
+  "services": {
+    "foundation": true,
+    "sipFloor": true,
+    "sipWalls": true,
+    "sipCeiling": true,
+    "partitions": true,
+    "roof": true,
+    "terrace": true,
+    "openings": true
+  }
+}
