@@ -62,6 +62,23 @@ export function bindingLinesFromPileRows(rows = []) {
   }));
 }
 
+export function generateAutoBindingLines(plan, verticalRows = 4, horizontalRows = 5) {
+  const w = Math.max(0.5, Number(plan?.house?.w) || 0.5);
+  const h = Math.max(0.5, Number(plan?.house?.h) || 0.5);
+  const vCount = Math.max(2, Math.min(24, Math.round(Number(verticalRows) || 4)));
+  const hCount = Math.max(2, Math.min(24, Math.round(Number(horizontalRows) || 5)));
+  const lines = [];
+  for (let index = 0; index < vCount; index += 1) {
+    const x = vCount === 1 ? 0 : w * index / (vCount - 1);
+    lines.push({ id: `auto-binding-v-${index + 1}`, name: `Авто · вертикаль ${index + 1}`, x1: round(x, 3), y1: 0, x2: round(x, 3), y2: round(h, 3), group: 'house', include: true, auto: true, axis: 'vertical' });
+  }
+  for (let index = 0; index < hCount; index += 1) {
+    const y = hCount === 1 ? 0 : h * index / (hCount - 1);
+    lines.push({ id: `auto-binding-h-${index + 1}`, name: `Авто · горизонталь ${index + 1}`, x1: 0, y1: round(y, 3), x2: round(w, 3), y2: round(y, 3), group: 'house', include: true, auto: true, axis: 'horizontal' });
+  }
+  return lines;
+}
+
 export function generateAutoPileRows(plan, spacing = 2.5) {
   const safeSpacing = Math.max(0.5, Number(spacing) || 2.5);
   const createRow = (id, name, a, b, group = 'house') => {
@@ -95,10 +112,19 @@ export function generateAutoPileRows(plan, spacing = 2.5) {
 export function calculateFoundation(plan, settings = {}) {
   const spacing = Math.max(0.5, Number(settings.spacing) || 2.5);
   const houseRows = (plan.pileRows || []).filter((row) => row.group !== 'platform');
-  const housePoints = houseRows.flatMap(rowPoints).concat((plan.piles || []).map((pile) => ({ ...pile, source: 'house' })));
+  const housePoints = uniquePoints([houseRows.flatMap(rowPoints).concat((plan.piles || []).map((pile) => ({ ...pile, source: 'house' })))], 0.05);
   const platforms = (plan.platforms || []).filter((platform) => platform.include !== false && platform.foundation?.mode !== 'none');
   const platformPoints = platforms.flatMap((platform) => perimeterRows(platform, spacing).flatMap(rowPoints));
-  const points = uniquePoints([housePoints, platformPoints]);
+  // Опора террасы/крыльца рядом с домовой опорой считается общей, даже если геометрически точки не совпали идеально.
+  // Это убирает бессмысленные дубли свай вдоль примыкания площадки к дому.
+  const sharedReuseDistance = Math.max(0.18, Math.min(0.6, Number(settings.sharedPileReuseDistance) || spacing * 0.2));
+  const points = housePoints.map((point) => ({ ...point }));
+  platformPoints.forEach((point) => {
+    const nearbyHouse = points.find((candidate) => (candidate.source === 'house' || candidate.source === 'shared') && Math.hypot(candidate.x - point.x, candidate.y - point.y) <= sharedReuseDistance);
+    if (nearbyHouse) { nearbyHouse.source = 'shared'; return; }
+    const nearbyPlatform = points.find((candidate) => candidate.source === 'platform' && Math.hypot(candidate.x - point.x, candidate.y - point.y) <= 0.05);
+    if (!nearbyPlatform) points.push({ ...point, source: 'platform' });
+  });
   const sharedPiles = points.filter((point) => point.source === 'shared').length;
   const housePiles = points.filter((point) => point.source === 'house' || point.source === 'shared').length;
   const platformPiles = points.filter((point) => point.source === 'platform' || point.source === 'shared').length;
@@ -119,6 +145,7 @@ export function calculateFoundation(plan, settings = {}) {
     housePiles,
     platformPiles,
     sharedPiles,
+    sharedReuseDistance: round(sharedReuseDistance, 2),
     houseBindingLength: round(houseBindingLength),
     platformBindingLength: round(platformBinding),
     bindingLength: round(bindingLength),

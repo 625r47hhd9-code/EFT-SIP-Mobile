@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { calculatePlanMetrics, chooseDimensionSides, polygonArea } from '../../calculations/plan-metrics.js';
 import { calculateTerraceRoof, normalizeTerracePlatform } from '../../calculations/terrace-model.js';
-import { bindingLinesFromPileRows, calculateFoundation, generateAutoPileRows } from '../calculations/foundation-model.js';
+import { bindingLinesFromPileRows, calculateFoundation, generateAutoBindingLines, generateAutoPileRows } from '../calculations/foundation-model.js';
 import { Field, NumberField, ScreenHeader, SelectField, Stat, Toggle } from '../components/ui.jsx';
 import { createCompactPlan, createDefaultPlan, createEmptyPlan } from '../state/project-model.js';
 import { useProject } from '../state/ProjectContext.jsx';
@@ -211,6 +211,8 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const gestureRef = useRef(null);
   const activePointersRef = useRef(new Map());
   const pinchRef = useRef(null);
+  const pinchConsumedRef = useRef(false);
+  const pendingTouchSelectionRef = useRef(null);
   const [gesture, setGestureState] = useState(null);
   const [hoverSnap, setHoverSnap] = useState(null);
   const setGesture = (value) => { gestureRef.current = typeof value === 'function' ? value(gestureRef.current) : value; setGestureState(gestureRef.current); };
@@ -255,6 +257,11 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const objectDown = (event, type, id, extra = {}) => {
     if (tool === 'delete') { event.stopPropagation(); deleteObject(type, id); setSelected(null); return; }
     if (tool !== 'select') return;
+    if (event.pointerType === 'touch') {
+      event.stopPropagation();
+      pendingTouchSelectionRef.current = { type, id, pointerId: event.pointerId };
+      return;
+    }
     setSelected({ type, id }); begin(event, { kind: extra.kind || 'move', type, id, index: extra.index });
   };
   const addAt = (point, type) => {
@@ -279,6 +286,8 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     if (activePointersRef.current.size === 2) {
       const [a, b] = [...activePointersRef.current.values()];
       pinchRef.current = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: viewportZoom ?? plan.zoom ?? 100 };
+      pinchConsumedRef.current = true;
+      pendingTouchSelectionRef.current = null;
       setGesture(null);
       setHoverSnap(null);
     }
@@ -286,11 +295,12 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const finishPointer = (event) => {
     activePointersRef.current.delete(event.pointerId);
     if (activePointersRef.current.size < 2) pinchRef.current = null;
+    if (activePointersRef.current.size === 0) window.setTimeout(() => { pinchConsumedRef.current = false; }, 0);
   };
   const canvasDown = (event) => {
     if (event.button !== 0) return;
     const point = toPlan(event);
-    if (tool === 'select') { setSelected(null); return; }
+    if (tool === 'select') { if (event.pointerType !== 'touch') setSelected(null); return; }
     if (tool === 'polygon') {
       if (shouldClosePolygon(polygonDraft, point)) { finishPolygon(); return; }
       setPolygonDraft((current) => [...current, point]); return;
@@ -303,7 +313,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     if (pinchRef.current && activePointersRef.current.size >= 2) {
       const [a, b] = [...activePointersRef.current.values()];
       const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
-      const nextZoom = Math.max(55, Math.min(240, Math.round(pinchRef.current.zoom * distance / pinchRef.current.distance)));
+      const nextZoom = Math.max(55, Math.min(600, Math.round(pinchRef.current.zoom * distance / pinchRef.current.distance)));
       onViewportZoom?.(nextZoom);
       event.preventDefault();
       return;
@@ -314,7 +324,14 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     setGesture((current) => ({ ...current, end: resolved.point }));
   };
   const pointerUp = (event) => {
-    if (pinchRef.current) { finishPointer(event); return; }
+    if (pinchRef.current || pinchConsumedRef.current) { pendingTouchSelectionRef.current = null; finishPointer(event); return; }
+    if (!gestureRef.current && pendingTouchSelectionRef.current?.pointerId === event.pointerId) {
+      const target = pendingTouchSelectionRef.current;
+      pendingTouchSelectionRef.current = null;
+      setSelected({ type: target.type, id: target.id });
+      finishPointer(event);
+      return;
+    }
     const current = gestureRef.current;
     if (!current || event.pointerId !== current.pointerId) { finishPointer(event); return; }
     const finalGesture = { ...current, end: toPlan(event) };
@@ -366,7 +383,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     <rect className="plan-grid-hit" width={VIEW.width} height={VIEW.height} fill="url(#planner-grid)" />
     {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - 5}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + 13}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
     <rect className="house-fill" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} />
-    {(shownPlan.rooms || []).map((room) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'room', room.id)}><polygon className={`room-fill ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><text className="room-name" x={center.x} y={center.y - 12}>{room.name}</text><text className="room-dimensions" x={center.x} y={center.y + 3}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" x={center.x} y={center.y + 17}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" x={center.x} y={center.y + 31}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
+    {(shownPlan.rooms || []).map((room, roomIndex) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'room', room.id)}><polygon className={`room-fill room-tone-${roomIndex % 6} ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><text className="room-name" x={center.x} y={center.y - 12}>{room.name}</text><text className="room-dimensions" x={center.x} y={center.y + 3}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" x={center.x} y={center.y + 17}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" x={center.x} y={center.y + 31}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
     <rect className="outer-wall" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} style={{ strokeWidth: Math.max(7, shownPlan.wallThickness * layout.scale) }} />
     {unifiedWalls.map((segment, index) => drawSegment(segment, `unified-${index}`))}
     {selectedRoom ? <g className="selected-room-overlay"><polygon className="selected-room-outline" points={selectedRoomScreen.map((point) => `${point.x},${point.y}`).join(' ')} />{selectedRoomScreen.map((point, index) => <circle key={index} className="vertex-handle selected-room-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', selectedRoom.id, { kind: 'vertex', index })} />)}</g> : null}
@@ -512,7 +529,10 @@ export default function PlanScreen({ onNavigate }) {
   const [tool, setTool] = useState('select');
   const [selected, setSelected] = useState(null);
   const [polygonDraft, setPolygonDraft] = useState([]);
-  const [viewportZoom, setViewportZoom] = useState(() => Math.max(55, Math.min(240, Number(project?.plan?.zoom) || 100)));
+  const [viewportZoom, setViewportZoom] = useState(() => Math.max(55, Math.min(600, Number(project?.plan?.zoom) || 100)));
+  const [bindingSetupOpen, setBindingSetupOpen] = useState(false);
+  const [bindingVerticalRows, setBindingVerticalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingVerticalRows) || 4));
+  const [bindingHorizontalRows, setBindingHorizontalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingHorizontalRows) || 5));
   const [gridVisible, setGridVisible] = useState(true);
   const [transferStatus, setTransferStatus] = useState('План автоматически сохраняется вместе с проектом');
   const planFileRef = useRef(null);
@@ -582,8 +602,16 @@ export default function PlanScreen({ onNavigate }) {
     setSelected(null); setTool('select');
   };
   const autoBinding = () => {
-    commitPlan((next) => { next.bindingLines = bindingLinesFromPileRows(next.pileRows); next.showBinding = true; });
-    setSelected(null); setTool('select');
+    const vertical = Math.max(2, Math.min(24, Math.round(Number(bindingVerticalRows) || 4)));
+    const horizontal = Math.max(2, Math.min(24, Math.round(Number(bindingHorizontalRows) || 5)));
+    commit((next) => {
+      next.settings.piles.autoBindingVerticalRows = vertical;
+      next.settings.piles.autoBindingHorizontalRows = horizontal;
+      next.plan.bindingLines = generateAutoBindingLines(next.plan, vertical, horizontal);
+      next.plan.showBinding = true;
+      return next;
+    });
+    setBindingSetupOpen(false); setSelected(null); setTool('select');
   };
   const openVisualMode = (mode) => { sessionStorage.setItem('eft-visual-mode', mode); onNavigate?.('visualization'); };
   useEffect(() => {
@@ -601,14 +629,15 @@ export default function PlanScreen({ onNavigate }) {
   const mobileEditor = <div className={`mobile-plan-fullscreen ${gridVisible ? '' : 'grid-hidden'}`}>
     <div className="mobile-plan-top-controls">
       <button className="mobile-float-button" type="button" onClick={() => onNavigate?.('visualization')} aria-label="Выйти из редактора"><ChevronLeft /></button>
-      <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoPiles}><Sparkles />Автосваи</button><button type="button" onClick={autoBinding}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
-      <div className="mobile-zoom-chip"><button type="button" onClick={() => setViewportZoom((z) => Math.max(55,z-10))}><ZoomOut /></button><strong>{viewportZoom}%</strong><button type="button" onClick={() => setViewportZoom((z) => Math.min(240,z+10))}><ZoomIn /></button></div>
+      <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoPiles}><Sparkles />Автосваи</button><button type="button" onClick={() => setBindingSetupOpen(true)}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
+      <div className="mobile-zoom-chip"><button type="button" onClick={() => setViewportZoom((z) => Math.max(55,z-10))}><ZoomOut /></button><strong>{viewportZoom}%</strong><button type="button" onClick={() => setViewportZoom((z) => Math.min(600,z+10))}><ZoomIn /></button></div>
       <button className={`mobile-grid-chip ${gridVisible ? 'active' : ''}`} type="button" onClick={() => setGridVisible((v) => !v)}><Grid3X3 /><span>Сетка</span></button>
       <div className="mobile-history-chip"><button type="button" onClick={undo} disabled={!canUndo}><Undo2 /></button><button type="button" onClick={redo} disabled={!canRedo}><Redo2 /></button></div>
       <details className="mobile-view-menu"><summary><Layers3 /><span>Вид</span><ChevronDown /></summary><div><button className="active" type="button"><Check />План</button><button type="button" onClick={() => openVisualMode('3d')}><Box />3D</button><button type="button" onClick={() => openVisualMode('frame')}><Hammer />Каркас</button><button type="button" onClick={() => openVisualMode('sip')}><Layers3 />СИП</button><button type="button" onClick={() => openVisualMode('roof')}><Home />Кровля</button></div></details>
     </div>
     <aside className="mobile-plan-tools">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</aside>
-    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} /><div className="mobile-pinch-tip">↔ Два пальца: масштаб</div></div>
+    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} /><div className="mobile-pinch-tip">Два пальца: масштаб · до 600%</div></div>
+    {bindingSetupOpen ? <section className="mobile-binding-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автообвязка</strong><small>2 ряда = только крайние линии</small></div><button type="button" onClick={() => setBindingSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Вертикальных рядов" value={bindingVerticalRows} suffix="шт" onMinus={() => setBindingVerticalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingVerticalRows((v) => Math.min(24, Math.round(v)+1))} /><MobileStepper label="Горизонтальных рядов" value={bindingHorizontalRows} suffix="шт" onMinus={() => setBindingHorizontalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingHorizontalRows((v) => Math.min(24, Math.round(v)+1))} /></div><button className="button primary mobile-binding-apply" type="button" onClick={autoBinding}><Sparkles />Построить обвязку</button><p>Ряды распределяются равномерно. После построения любую линию можно поправить вручную.</p></section> : null}
     <MobileSelectionAdjuster plan={plan} selected={selected} commitPlan={commitPlan} setSelected={setSelected} />
   </div>;
   return <><div className="mobile-plan-editor-only">{mobileEditor}</div><div className="desktop-plan-editor screen plan-screen-v2"><ScreenHeader title="План дома" description="Новый редактор: каждое действие можно выбрать, изменить, удалить и отменить" actions={<><button className="button primary" onClick={newPlan}><Plus />Новый план</button><button className="button secondary" onClick={savePlanFile}><Download />Сохранить план</button><button className="button secondary" onClick={() => planFileRef.current?.click()}><Upload />Открыть план</button><button className="button secondary" onClick={sharePlanFile}><Share2 />Поделиться</button><input ref={planFileRef} className="visually-hidden" type="file" accept=".eft-plan.json,.eft.json,.json" onChange={openPlanFile} /><button className="button secondary auto-piles-button" onClick={autoPiles}><Sparkles />Автосваи</button><button className="button secondary" onClick={autoBinding}><Layers3 />Автообвязка</button><select className="sketch-select" value={sketchId} onChange={(event) => setSketchId(event.target.value)}>{sketches.map((sketch) => <option key={sketch.id} value={sketch.id}>{sketch.name}</option>)}</select><button className="button secondary" onClick={loadSketch}>Загрузить</button><button className="button secondary" onClick={saveSketch}><Save />В эскизы</button><button className="button ghost" onClick={undo} disabled={!canUndo}><Undo2 />Отменить</button><button className="button ghost" onClick={redo} disabled={!canRedo}><Redo2 />Повторить</button></>} />
