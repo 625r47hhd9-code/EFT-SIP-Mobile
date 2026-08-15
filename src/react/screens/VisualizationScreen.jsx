@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Box, Grid3X3, Hammer, Home, Layers3, RotateCcw } from 'lucide-react';
+import { Box, Eye, EyeOff, Grid3X3, Hammer, Home, Layers3, RotateCcw } from 'lucide-react';
 import { useProject } from '../state/ProjectContext.jsx';
 import { calculateProject } from '../calculations/estimate-engine.js';
 
@@ -28,7 +28,7 @@ function pts(points) {
   return points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 }
 
-function HouseIso({ project, calculation, mode }) {
+function HouseIso({ project, calculation, mode, roofHidden = false }) {
   const plan = project.plan;
   const w = Number(plan.house?.w) || 8;
   const h = Number(plan.house?.h) || 10;
@@ -44,7 +44,7 @@ function HouseIso({ project, calculation, mode }) {
   const rightRoofEdge = projectIso(w, h/2, wallHeight + ridgeHeight, dims);
   const roofFront = [top[3], top[2], rightRoofEdge, leftRoofEdge];
   const roofBack = [top[0], top[1], rightRoofEdge, leftRoofEdge];
-  const roofVisible = mode !== 'frame';
+  const roofVisible = mode !== 'frame' && !roofHidden;
   const wallOpacity = mode === 'frame' ? .10 : mode === 'roof' ? .18 : .96;
   const sipStep = clamp(1.25, .5, 2);
   const panelLines = [];
@@ -130,6 +130,7 @@ function PlanPreview({ project }) {
 export default function VisualizationScreen() {
   const { project } = useProject();
   const [mode, setMode] = useState('3d');
+  const [roofHidden, setRoofHidden] = useState(false);
   const calculation = useMemo(() => calculateProject(project), [project]);
   const totalPanels = calculation?.sip?.cutting?.reduce((sum, row) => sum + (Number(row.panels) || 0), 0) || 0;
   return <section className="visualization-screen">
@@ -142,14 +143,15 @@ export default function VisualizationScreen() {
       {MODES.map(([id,label,Icon]) => <button key={id} className={mode===id?'active':''} onClick={()=>setMode(id)}><Icon/><span>{label}</span></button>)}
     </nav>
     <article className="visual-stage">
-      {mode === 'plan' ? <PlanPreview project={project}/> : <HouseIso project={project} calculation={calculation} mode={mode}/>} 
-      <div className="visual-stage-badge"><RotateCcw/><span>Параметрическая модель</span></div>
+      {mode === 'plan' ? <PlanPreview project={project}/> : <HouseIso project={project} calculation={calculation} mode={mode} roofHidden={roofHidden}/>}
+      {mode !== 'plan' && mode !== 'roof' ? <button className="visual-roof-toggle" type="button" onClick={()=>setRoofHidden((value)=>!value)}>{roofHidden ? <Eye/> : <EyeOff/>}<span>{roofHidden ? 'Показать крышу' : 'Снять крышу'}</span></button> : null}
+      <div className="visual-stage-badge"><RotateCcw/><span>Связано с планом</span></div>
     </article>
     <div className="visual-facts">
       <article><span>Площадь</span><strong>{((Number(project.plan.house?.w)||0)*(Number(project.plan.house?.h)||0)).toFixed(1)} м²</strong></article>
       <article><span>СИП</span><strong>{totalPanels} шт.</strong></article>
       <article><span>Кровля</span><strong>{Number(calculation?.roof?.totalArea || calculation?.roof?.geometry?.totalSlopeArea || 0).toFixed(1)} м²</strong></article>
     </div>
-    <div className="visual-note"><strong>Что уже связано</strong><span>Габариты дома, высота стен, тип и высота кровли, помещения, наружные проёмы, террасы и данные СИП-расчёта.</span></div>
+    <div className="visual-note"><strong>Одна модель данных</strong><span>Изменения плана, высоты стен, кровли, проёмов и террас сразу попадают сюда и в расчёты. Отдельных «3D-размеров» нет.</span></div>
   </section>;
 }
