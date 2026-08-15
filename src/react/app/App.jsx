@@ -72,9 +72,9 @@ function downloadProject(project) {
   setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
-function Screen({ active }) {
+function Screen({ active, onNavigate }) {
   if (active === 'visualization') return <VisualizationScreen />;
-  if (active === 'plan') return <PlanScreen />;
+  if (active === 'plan') return <PlanScreen onNavigate={onNavigate} />;
   if (active === 'parameters') return <ParametersScreen />;
   if (active === 'price') return <PriceScreen />;
   if (active === 'estimate') return <EstimateScreen />;
@@ -301,10 +301,10 @@ export function App() {
   const projectName = project.meta?.projectNum ? `Дом № ${project.meta.projectNum}` : 'Новый дом';
 
   return (
-    <div className="app mobile-app-shell" data-theme={theme}>
+    <div className={`app mobile-app-shell ${section === 'home' && active === 'plan' ? 'plan-editor-active' : ''}`} data-theme={theme}>
       <header className="mobile-topbar">
         <div className="mobile-topbar-main">
-          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M4 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
+          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M5 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
           <button className="mobile-more-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /></button>
         </div>
         <div className="mobile-total-strip">
@@ -325,7 +325,7 @@ export function App() {
 
       <main className="mobile-workspace">
         <Suspense fallback={<div className="mobile-loader"><span /><strong>Загружаю раздел…</strong></div>}>
-          {section === 'cutting' ? <CuttingScreen calculation={calculation} /> : <Screen active={active} />}
+          {section === 'cutting' ? <CuttingScreen calculation={calculation} /> : <Screen active={active} onNavigate={navigateScreen} />}
         </Suspense>
       </main>
 

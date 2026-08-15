@@ -129,7 +129,8 @@ function PlanPreview({ project }) {
 
 export default function VisualizationScreen() {
   const { project } = useProject();
-  const [mode, setMode] = useState('3d');
+  const [mode, setModeState] = useState(() => sessionStorage.getItem('eft-visual-mode') || '3d');
+  const setMode = (nextMode) => { sessionStorage.setItem('eft-visual-mode', nextMode); setModeState(nextMode); };
   const [roofHidden, setRoofHidden] = useState(false);
   const calculation = useMemo(() => calculateProject(project), [project]);
   const totalPanels = calculation?.sip?.cutting?.reduce((sum, row) => sum + (Number(row.panels) || 0), 0) || 0;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, BrickWall, CircleDot, DoorOpen, Download, Fence, HousePlus, Layers3, ListTree,
   MoreHorizontal, MousePointer2, PanelsTopLeft, Pentagon, Plus, Redo2, Ruler, Save, Scissors, Share2, Sparkles,
-  SquareDashed, Trash2, Undo2, Upload, X, ZoomIn, ZoomOut
+  SquareDashed, Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, ChevronLeft, ChevronDown, Grid3X3, Box, Hammer, Home, Check, Minus
 } from 'lucide-react';
 import { calculatePlanMetrics, chooseDimensionSides, polygonArea } from '../../calculations/plan-metrics.js';
 import { calculateTerraceRoof, normalizeTerracePlatform } from '../../calculations/terrace-model.js';
@@ -206,16 +206,19 @@ function DraftPolygonEdge({ points, hoverPoint, p }) {
   </g>;
 }
 
-function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraft, setPolygonDraft, finishPolygon, issues }) {
+function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraft, setPolygonDraft, finishPolygon, issues, viewportZoom, onViewportZoom }) {
   const svgRef = useRef(null);
   const gestureRef = useRef(null);
+  const activePointersRef = useRef(new Map());
+  const pinchRef = useRef(null);
   const [gesture, setGestureState] = useState(null);
   const [hoverSnap, setHoverSnap] = useState(null);
   const setGesture = (value) => { gestureRef.current = typeof value === 'function' ? value(gestureRef.current) : value; setGestureState(gestureRef.current); };
   const shownPlan = useMemo(() => previewPlan(plan, gesture), [plan, gesture]);
   // The viewport must stay fixed during a drag; otherwise an outside terrace
   // changes the fitted bounds and the object jumps away from the pointer.
-  const layout = useMemo(() => layoutFor(plan), [plan]);
+  const layoutPlan = useMemo(() => ({ ...plan, zoom: viewportZoom ?? plan.zoom }), [plan, viewportZoom]);
+  const layout = useMemo(() => layoutFor(layoutPlan), [layoutPlan]);
   const foundation = useMemo(() => calculateFoundation(shownPlan, { spacing: 2.5, boardVolumePerMeter: 0.0225 }), [shownPlan]);
   const unifiedWalls = useMemo(() => unifiedWallSegments(shownPlan), [shownPlan]);
   const issueRooms = useMemo(() => new Set(issues.flatMap((issue) => issue.roomIds || [])), [issues]);
@@ -271,6 +274,19 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       commitPlan((next) => next.openings.push(opening)); setSelected({ type: 'opening', id });
     }
   };
+  const pointerDownCapture = (event) => {
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (activePointersRef.current.size === 2) {
+      const [a, b] = [...activePointersRef.current.values()];
+      pinchRef.current = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: viewportZoom ?? plan.zoom ?? 100 };
+      setGesture(null);
+      setHoverSnap(null);
+    }
+  };
+  const finishPointer = (event) => {
+    activePointersRef.current.delete(event.pointerId);
+    if (activePointersRef.current.size < 2) pinchRef.current = null;
+  };
   const canvasDown = (event) => {
     if (event.button !== 0) return;
     const point = toPlan(event);
@@ -283,14 +299,24 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     if (DRAW_TOOLS.has(tool)) begin(event, { kind: 'draw', type: tool });
   };
   const pointerMove = (event) => {
+    if (activePointersRef.current.has(event.pointerId)) activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pinchRef.current && activePointersRef.current.size >= 2) {
+      const [a, b] = [...activePointersRef.current.values()];
+      const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      const nextZoom = Math.max(55, Math.min(240, Math.round(pinchRef.current.zoom * distance / pinchRef.current.distance)));
+      onViewportZoom?.(nextZoom);
+      event.preventDefault();
+      return;
+    }
     const resolved = resolvePlanPoint(event);
     setHoverSnap(resolved);
     if (!gestureRef.current || event.pointerId !== gestureRef.current.pointerId) return;
     setGesture((current) => ({ ...current, end: resolved.point }));
   };
   const pointerUp = (event) => {
+    if (pinchRef.current) { finishPointer(event); return; }
     const current = gestureRef.current;
-    if (!current || event.pointerId !== current.pointerId) return;
+    if (!current || event.pointerId !== current.pointerId) { finishPointer(event); return; }
     const finalGesture = { ...current, end: toPlan(event) };
     if (current.kind === 'draw') {
       const distance = Math.hypot(finalGesture.end.x - finalGesture.start.x, finalGesture.end.y - finalGesture.start.y);
@@ -321,7 +347,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       const next = previewPlan(plan, finalGesture);
       if (JSON.stringify(next) !== JSON.stringify(plan)) commitPlan((target) => Object.assign(target, next));
     }
-    svgRef.current.releasePointerCapture?.(event.pointerId); setGesture(null);
+    svgRef.current.releasePointerCapture?.(event.pointerId); setGesture(null); finishPointer(event);
   };
 
   const topLeft = p(0, 0); const bottomRight = p(shownPlan.house.w, shownPlan.house.h);
@@ -335,7 +361,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const renderCut = (item, className) => { const q = p(item.x, item.y); const size = Math.max(18, item.width * layout.scale); return item.orientation === 'v' ? <line className={className} x1={q.x} y1={q.y - size / 2} x2={q.x} y2={q.y + size / 2} /> : <line className={className} x1={q.x - size / 2} y1={q.y} x2={q.x + size / 2} y2={q.y} />; };
   const renderOpeningHit = (item) => { const q = p(item.x, item.y); const size = Math.max(28, item.width * layout.scale); return item.orientation === 'v' ? <rect className="opening-hit" x={q.x - 14} y={q.y - size / 2} width="28" height={size} /> : <rect className="opening-hit" x={q.x - size / 2} y={q.y - 14} width={size} height="28" />; };
   const hasManualPileAt = (point) => (shownPlan.piles || []).some((pile) => Math.hypot(pile.x - point.x, pile.y - point.y) <= 0.02);
-  return <svg ref={svgRef} className={`plan-svg tool-${tool}`} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label="Редактор плана дома" onPointerDown={canvasDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerLeave={() => { if (!gestureRef.current) setHoverSnap(null); }} onPointerCancel={() => setGesture(null)}>
+  return <svg ref={svgRef} className={`plan-svg tool-${tool}`} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label="Редактор плана дома" onPointerDownCapture={pointerDownCapture} onPointerDown={canvasDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerLeave={() => { if (!gestureRef.current) setHoverSnap(null); }} onPointerCancel={(event) => { finishPointer(event); setGesture(null); }}>
     <defs><pattern id="planner-small-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#617064" strokeOpacity=".13" /></pattern><pattern id="planner-grid" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="url(#planner-small-grid)" /><path d="M50 0H0V50" fill="none" stroke="#4d6250" strokeOpacity=".22" /></pattern><marker id="planner-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="currentColor" /></marker></defs>
     <rect className="plan-grid-hit" width={VIEW.width} height={VIEW.height} fill="url(#planner-grid)" />
     {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - 5}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + 13}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
@@ -425,11 +451,69 @@ function Inspector({ plan, selected, commitPlan, issues, setSelected }) {
   return <RoomList plan={plan} issues={issues} onSelect={setSelected} />;
 }
 
-export default function PlanScreen() {
+
+const MOBILE_TOOLS = [
+  ['select', 'Выбрать', MousePointer2], ['room', 'Комната', SquareDashed], ['wall', 'Перегородка', BrickWall],
+  ['window', 'Окно', PanelsTopLeft], ['door', 'Дверь', DoorOpen], ['bindingLine', 'Обвязка', Layers3], ['dimension', 'Замер', Ruler]
+];
+
+const roundDisplay = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+function MobileStepper({ label, value, onMinus, onPlus, suffix = 'м' }) {
+  return <div className="mobile-plan-stepper"><span>{label}</span><div><button type="button" onClick={onMinus} aria-label={`Уменьшить ${label} на 10 см`}><Minus /></button><strong>{roundDisplay(value).toFixed(2)} {suffix}</strong><button type="button" onClick={onPlus} aria-label={`Увеличить ${label} на 10 см`}><Plus /></button></div></div>;
+}
+
+function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
+  if (!selected) return null;
+  const get = (key) => (plan[key] || []).find((item) => item.id === selected.id);
+  const update = (key, mutate) => commitPlan((next) => { const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) mutate(item); });
+  const room = selected.type === 'room' ? get('rooms') : null;
+  const opening = selected.type === 'opening' ? get('openings') : null;
+  const platform = selected.type === 'platform' ? get('platforms') : null;
+  const wall = selected.type === 'wall' ? get('walls') : null;
+  const binding = selected.type === 'bindingLine' ? get('bindingLines') : null;
+  const dimension = selected.type === 'dimension' ? get('dimensions') : null;
+  const gap = selected.type === 'gap' ? get('wallGaps') : null;
+  const step = .1;
+  const resizeRoom = (axis, delta) => {
+    if (!room) return;
+    update('rooms', (item) => {
+      const old = boundsOf(roomPoints(item)); const target = Math.max(.5, (axis === 'w' ? old.w : old.h) + delta);
+      const sx = axis === 'w' ? target / Math.max(.1, old.w) : 1; const sy = axis === 'h' ? target / Math.max(.1, old.h) : 1;
+      item.points = roomPoints(item).map((point) => ({ x: roundCoord(old.x + (point.x - old.x) * sx), y: roundCoord(old.y + (point.y - old.y) * sy) })); Object.assign(item, boundsOf(item.points));
+    });
+  };
+  const resizeLine = (key, delta) => update(key, (line) => {
+    const dx = line.x2 - line.x1; const dy = line.y2 - line.y1; const len = Math.max(.01, Math.hypot(dx, dy)); const next = Math.max(.1, len + delta);
+    line.x2 = roundCoord(line.x1 + dx / len * next); line.y2 = roundCoord(line.y1 + dy / len * next);
+  });
+  let title = 'Элемент'; let controls = null;
+  if (room) {
+    const b = boundsOf(roomPoints(room)); title = `Комната · ${room.name}`;
+    controls = <><MobileStepper label="Ширина" value={b.w} onMinus={() => resizeRoom('w', -step)} onPlus={() => resizeRoom('w', step)} /><MobileStepper label="Длина" value={b.h} onMinus={() => resizeRoom('h', -step)} onPlus={() => resizeRoom('h', step)} /></>;
+  } else if (opening) {
+    title = opening.type === 'window' ? 'Окно' : 'Дверь';
+    controls = <><MobileStepper label="Ширина" value={opening.width} onMinus={() => update('openings', (i) => { i.width = Math.max(.3, roundCoord(i.width - step)); })} onPlus={() => update('openings', (i) => { i.width = roundCoord(i.width + step); })} /><MobileStepper label="Высота" value={opening.height} onMinus={() => update('openings', (i) => { i.height = Math.max(.5, roundCoord(i.height - step)); })} onPlus={() => update('openings', (i) => { i.height = roundCoord(i.height + step); })} /></>;
+  } else if (platform) {
+    title = platform.kind === 'porch' ? 'Крыльцо' : 'Терраса';
+    controls = <><MobileStepper label="Ширина" value={platform.w} onMinus={() => update('platforms', (i) => { i.w = Math.max(.5, roundCoord(i.w - step)); })} onPlus={() => update('platforms', (i) => { i.w = roundCoord(i.w + step); })} /><MobileStepper label="Длина" value={platform.h} onMinus={() => update('platforms', (i) => { i.h = Math.max(.5, roundCoord(i.h - step)); })} onPlus={() => update('platforms', (i) => { i.h = roundCoord(i.h + step); })} /></>;
+  } else if (wall || binding || dimension) {
+    const item = wall || binding || dimension; const key = wall ? 'walls' : binding ? 'bindingLines' : 'dimensions';
+    title = wall ? 'Перегородка' : binding ? 'Обвязка' : 'Размер'; const length = Math.hypot(item.x2-item.x1,item.y2-item.y1);
+    controls = <MobileStepper label="Длина" value={length} onMinus={() => resizeLine(key, -step)} onPlus={() => resizeLine(key, step)} />;
+  } else if (gap) {
+    title = 'Разрыв стены'; controls = <MobileStepper label="Ширина" value={gap.width} onMinus={() => update('wallGaps', (i) => { i.width = Math.max(.1, roundCoord(i.width-step)); })} onPlus={() => update('wallGaps', (i) => { i.width = roundCoord(i.width+step); })} />;
+  }
+  return <section className="mobile-selection-sheet"><div className="mobile-sheet-grabber" /><header><strong>{title}</strong><button type="button" onClick={() => setSelected(null)}><X /></button></header><div className="mobile-stepper-grid">{controls}</div><details className="mobile-selection-more"><summary>Все параметры <ChevronDown /></summary><div className="mobile-selection-inspector"><Inspector plan={plan} selected={selected} commitPlan={commitPlan} issues={[]} setSelected={setSelected} /></div></details><small>Шаг кнопок: 10 см · значения на экране округляются до 2 знаков</small></section>;
+}
+
+export default function PlanScreen({ onNavigate }) {
   const { project, commit, undo, redo, canUndo, canRedo } = useProject();
   const [tool, setTool] = useState('select');
   const [selected, setSelected] = useState(null);
   const [polygonDraft, setPolygonDraft] = useState([]);
+  const [viewportZoom, setViewportZoom] = useState(() => Math.max(55, Math.min(240, Number(project?.plan?.zoom) || 100)));
+  const [gridVisible, setGridVisible] = useState(true);
   const [transferStatus, setTransferStatus] = useState('План автоматически сохраняется вместе с проектом');
   const planFileRef = useRef(null);
   const [customSketches, setCustomSketches] = useState(getStoredSketches);
@@ -501,6 +585,7 @@ export default function PlanScreen() {
     commitPlan((next) => { next.bindingLines = bindingLinesFromPileRows(next.pileRows); next.showBinding = true; });
     setSelected(null); setTool('select');
   };
+  const openVisualMode = (mode) => { sessionStorage.setItem('eft-visual-mode', mode); onNavigate?.('visualization'); };
   useEffect(() => {
     const keydown = (event) => {
       if (event.key === 'Escape') { setPolygonDraft([]); setTool('select'); setSelected(null); }
@@ -513,7 +598,20 @@ export default function PlanScreen() {
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   }, [selected, commitPlan]);
   const toolHint = tool === 'select' ? 'Выберите и перетащите объект. Окна, двери, ворота и линии обвязки можно двигать.' : tool === 'polygon' ? 'Ставьте углы комнаты. После третьей точки щёлкните по первой точке — контур замкнётся автоматически.' : tool === 'dimension' ? 'Протяните размер по объекту — линия автоматически вынесется наружу, затем её можно переместить.' : tool === 'pileRow' ? 'Начало и конец прилипают к узлам. Зелёный — точно по горизонтали или вертикали, красный — есть отклонение.' : tool === 'bindingLine' ? 'Протяните направляющую обвязки от узла до узла. Зелёный — точная ось, красный — отклонение.' : ['window', 'door', 'gap', 'pile'].includes(tool) ? 'Щёлкните место установки. Тип гаражных ворот выбирается в параметрах двери.' : 'Зажмите кнопку мыши и протяните объект. Зелёный — горизонталь или вертикаль, красный — отклонение.';
-  return <div className="screen plan-screen-v2"><ScreenHeader title="План дома" description="Новый редактор: каждое действие можно выбрать, изменить, удалить и отменить" actions={<><button className="button primary" onClick={newPlan}><Plus />Новый план</button><button className="button secondary" onClick={savePlanFile}><Download />Сохранить план</button><button className="button secondary" onClick={() => planFileRef.current?.click()}><Upload />Открыть план</button><button className="button secondary" onClick={sharePlanFile}><Share2 />Поделиться</button><input ref={planFileRef} className="visually-hidden" type="file" accept=".eft-plan.json,.eft.json,.json" onChange={openPlanFile} /><button className="button secondary auto-piles-button" onClick={autoPiles}><Sparkles />Автосваи</button><button className="button secondary" onClick={autoBinding}><Layers3 />Автообвязка</button><select className="sketch-select" value={sketchId} onChange={(event) => setSketchId(event.target.value)}>{sketches.map((sketch) => <option key={sketch.id} value={sketch.id}>{sketch.name}</option>)}</select><button className="button secondary" onClick={loadSketch}>Загрузить</button><button className="button secondary" onClick={saveSketch}><Save />В эскизы</button><button className="button ghost" onClick={undo} disabled={!canUndo}><Undo2 />Отменить</button><button className="button ghost" onClick={redo} disabled={!canRedo}><Redo2 />Повторить</button></>} />
+  const mobileEditor = <div className={`mobile-plan-fullscreen ${gridVisible ? '' : 'grid-hidden'}`}>
+    <div className="mobile-plan-top-controls">
+      <button className="mobile-float-button" type="button" onClick={() => onNavigate?.('visualization')} aria-label="Выйти из редактора"><ChevronLeft /></button>
+      <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoPiles}><Sparkles />Автосваи</button><button type="button" onClick={autoBinding}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
+      <div className="mobile-zoom-chip"><button type="button" onClick={() => setViewportZoom((z) => Math.max(55,z-10))}><ZoomOut /></button><strong>{viewportZoom}%</strong><button type="button" onClick={() => setViewportZoom((z) => Math.min(240,z+10))}><ZoomIn /></button></div>
+      <button className={`mobile-grid-chip ${gridVisible ? 'active' : ''}`} type="button" onClick={() => setGridVisible((v) => !v)}><Grid3X3 /><span>Сетка</span></button>
+      <div className="mobile-history-chip"><button type="button" onClick={undo} disabled={!canUndo}><Undo2 /></button><button type="button" onClick={redo} disabled={!canRedo}><Redo2 /></button></div>
+      <details className="mobile-view-menu"><summary><Layers3 /><span>Вид</span><ChevronDown /></summary><div><button className="active" type="button"><Check />План</button><button type="button" onClick={() => openVisualMode('3d')}><Box />3D</button><button type="button" onClick={() => openVisualMode('frame')}><Hammer />Каркас</button><button type="button" onClick={() => openVisualMode('sip')}><Layers3 />СИП</button><button type="button" onClick={() => openVisualMode('roof')}><Home />Кровля</button></div></details>
+    </div>
+    <aside className="mobile-plan-tools">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</aside>
+    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} /><div className="mobile-pinch-tip">↔ Два пальца: масштаб</div></div>
+    <MobileSelectionAdjuster plan={plan} selected={selected} commitPlan={commitPlan} setSelected={setSelected} />
+  </div>;
+  return <><div className="mobile-plan-editor-only">{mobileEditor}</div><div className="desktop-plan-editor screen plan-screen-v2"><ScreenHeader title="План дома" description="Новый редактор: каждое действие можно выбрать, изменить, удалить и отменить" actions={<><button className="button primary" onClick={newPlan}><Plus />Новый план</button><button className="button secondary" onClick={savePlanFile}><Download />Сохранить план</button><button className="button secondary" onClick={() => planFileRef.current?.click()}><Upload />Открыть план</button><button className="button secondary" onClick={sharePlanFile}><Share2 />Поделиться</button><input ref={planFileRef} className="visually-hidden" type="file" accept=".eft-plan.json,.eft.json,.json" onChange={openPlanFile} /><button className="button secondary auto-piles-button" onClick={autoPiles}><Sparkles />Автосваи</button><button className="button secondary" onClick={autoBinding}><Layers3 />Автообвязка</button><select className="sketch-select" value={sketchId} onChange={(event) => setSketchId(event.target.value)}>{sketches.map((sketch) => <option key={sketch.id} value={sketch.id}>{sketch.name}</option>)}</select><button className="button secondary" onClick={loadSketch}>Загрузить</button><button className="button secondary" onClick={saveSketch}><Save />В эскизы</button><button className="button ghost" onClick={undo} disabled={!canUndo}><Undo2 />Отменить</button><button className="button ghost" onClick={redo} disabled={!canRedo}><Redo2 />Повторить</button></>} />
     <div className="mobile-plan-commandbar">
       <button type="button" onClick={undo} disabled={!canUndo}><Undo2 /><span>Назад</span></button>
       <button type="button" onClick={redo} disabled={!canRedo}><Redo2 /><span>Вперёд</span></button>
@@ -524,5 +622,5 @@ export default function PlanScreen() {
     <div className="plan-status-bar"><div className="plan-house-fields"><NumberField label="Габарит X" value={plan.house.w} suffix="м" min={3} onChange={(value) => commitPlan((next) => { next.house.w = value; })} /><NumberField label="Габарит Y" value={plan.house.h} suffix="м" min={3} onChange={(value) => commitPlan((next) => { next.house.h = value; })} /><NumberField label="Высота стен" value={plan.wallHeight} suffix="м" min={2} onChange={(value) => commitPlan((next) => { next.wallHeight = value; })} /></div><div className="plan-view-switches"><Toggle label="Сваи" checked={plan.showPiles !== false} onChange={(value) => commitPlan((next) => { next.showPiles = value; })} /><Toggle label="Обвязка" checked={plan.showBinding !== false} onChange={(value) => commitPlan((next) => { next.showBinding = value; })} /><Toggle label="Размеры" checked={plan.showDimensions !== false} onChange={(value) => commitPlan((next) => { next.showDimensions = value; })} /></div><div className="zoom-controls"><button className="icon-button" onClick={() => commitPlan((next) => { next.zoom = Math.max(65, (next.zoom || 100) - 10); })}><ZoomOut /></button><strong>{plan.zoom || 100}%</strong><button className="icon-button" onClick={() => commitPlan((next) => { next.zoom = Math.min(180, (next.zoom || 100) + 10); })}><ZoomIn /></button></div></div>
     <div className="planner-shell"><aside className="planner-tools">{TOOLS.map(([id, label, Icon]) => <button key={id} className={tool === id ? 'active' : ''} title={label} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}{tool === 'polygon' && polygonDraft.length ? <div className="polygon-actions"><button className="active" onClick={finishPolygon} disabled={polygonDraft.length < 3}><Save /><span>Замкнуть</span></button><button onClick={() => setPolygonDraft([])}><X /><span>Сброс</span></button></div> : null}</aside><div className="planner-canvas"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} /><div className="planner-hint">{toolHint}</div></div><aside className="planner-inspector"><Inspector plan={plan} selected={selected} setSelected={setSelected} commitPlan={commitPlan} issues={issues} /></aside></div>
     <div className="stats-row planner-stats"><Stat label="Пол всего дома" value={`${formatNumber(metrics.floorArea)} м²`} /><Stat label="Перегородки без задвоений" value={`${formatNumber(metrics.partitionLength)} м`} /><Stat label="Наружные стены" value={`${formatNumber(metrics.exteriorWallNetArea)} м²`} /><Stat label="Сваи" value={`${foundation.totalPiles} шт`} /><Stat label="Обвязка" value={`${formatNumber(foundation.bindingLength)} м · ${foundation.boardCount} досок × 6 м`} /><Stat label="Проверка" value={issues.length ? `${issues.length} ошибок` : 'Стыковка верна'} tone={issues.length ? 'danger' : ''} /></div>
-  </div>;
+  </div></>;
 }
