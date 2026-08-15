@@ -44,7 +44,7 @@ function layoutFor(plan) {
   const minY = Math.min(0, bounds.minY) - margin;
   const maxX = Math.max(plan.house.w, bounds.maxX) + margin;
   const maxY = Math.max(plan.house.h, bounds.maxY) + margin;
-  const scale = Math.min(980 / (maxX - minX), 660 / (maxY - minY)) * Math.max(0.65, Math.min(1.8, (plan.zoom || 100) / 100));
+  const scale = Math.min(980 / (maxX - minX), 660 / (maxY - minY)) * Math.max(0.35, Math.min(20, (plan.zoom || 100) / 100));
   return { scale, ox: VIEW.width / 2 - ((minX + maxX) / 2) * scale, oy: VIEW.height / 2 - ((minY + maxY) / 2) * scale, sides };
 }
 
@@ -206,13 +206,14 @@ function DraftPolygonEdge({ points, hoverPoint, p }) {
   </g>;
 }
 
-function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraft, setPolygonDraft, finishPolygon, issues, viewportZoom, onViewportZoom }) {
+function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraft, setPolygonDraft, finishPolygon, issues, viewportZoom, onViewportZoom, viewportPan = { x: 0, y: 0 }, onViewportPan }) {
   const svgRef = useRef(null);
   const gestureRef = useRef(null);
   const activePointersRef = useRef(new Map());
   const pinchRef = useRef(null);
   const pinchConsumedRef = useRef(false);
   const pendingTouchSelectionRef = useRef(null);
+  const panGestureRef = useRef(null);
   const [gesture, setGestureState] = useState(null);
   const [hoverSnap, setHoverSnap] = useState(null);
   const setGesture = (value) => { gestureRef.current = typeof value === 'function' ? value(gestureRef.current) : value; setGestureState(gestureRef.current); };
@@ -220,7 +221,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   // The viewport must stay fixed during a drag; otherwise an outside terrace
   // changes the fitted bounds and the object jumps away from the pointer.
   const layoutPlan = useMemo(() => ({ ...plan, zoom: viewportZoom ?? plan.zoom }), [plan, viewportZoom]);
-  const layout = useMemo(() => layoutFor(layoutPlan), [layoutPlan]);
+  const layout = useMemo(() => { const base = layoutFor(layoutPlan); return { ...base, ox: base.ox + (viewportPan?.x || 0), oy: base.oy + (viewportPan?.y || 0) }; }, [layoutPlan, viewportPan]);
   const foundation = useMemo(() => calculateFoundation(shownPlan, { spacing: 2.5, boardVolumePerMeter: 0.0225 }), [shownPlan]);
   const unifiedWalls = useMemo(() => unifiedWallSegments(shownPlan), [shownPlan]);
   const issueRooms = useMemo(() => new Set(issues.flatMap((issue) => issue.roomIds || [])), [issues]);
@@ -259,6 +260,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     if (tool !== 'select') return;
     if (event.pointerType === 'touch') {
       event.stopPropagation();
+      if (selected?.type === type && selected?.id === id) { begin(event, { kind: extra.kind || 'move', type, id, index: extra.index }); return; }
       pendingTouchSelectionRef.current = { type, id, pointerId: event.pointerId };
       return;
     }
@@ -285,7 +287,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (activePointersRef.current.size === 2) {
       const [a, b] = [...activePointersRef.current.values()];
-      pinchRef.current = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: viewportZoom ?? plan.zoom ?? 100 };
+      pinchRef.current = { distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), zoom: viewportZoom ?? plan.zoom ?? 100, pan: { ...(viewportPan || { x: 0, y: 0 }) }, center: { x: (a.x+b.x)/2, y: (a.y+b.y)/2 } };
       pinchConsumedRef.current = true;
       pendingTouchSelectionRef.current = null;
       setGesture(null);
@@ -300,7 +302,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const canvasDown = (event) => {
     if (event.button !== 0) return;
     const point = toPlan(event);
-    if (tool === 'select') { if (event.pointerType !== 'touch') setSelected(null); return; }
+    if (tool === 'select') { if (event.pointerType !== 'touch') setSelected(null); panGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: { ...(viewportPan || { x: 0, y: 0 }) } }; return; }
     if (tool === 'polygon') {
       if (shouldClosePolygon(polygonDraft, point)) { finishPolygon(); return; }
       setPolygonDraft((current) => [...current, point]); return;
@@ -313,10 +315,17 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     if (pinchRef.current && activePointersRef.current.size >= 2) {
       const [a, b] = [...activePointersRef.current.values()];
       const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
-      const nextZoom = Math.max(55, Math.min(600, Math.round(pinchRef.current.zoom * distance / pinchRef.current.distance)));
+      const nextZoom = Math.max(35, Math.min(2000, Math.round(pinchRef.current.zoom * distance / pinchRef.current.distance)));
+      const center = { x: (a.x+b.x)/2, y: (a.y+b.y)/2 };
       onViewportZoom?.(nextZoom);
+      onViewportPan?.({ x: pinchRef.current.pan.x + (center.x - pinchRef.current.center.x), y: pinchRef.current.pan.y + (center.y - pinchRef.current.center.y) });
       event.preventDefault();
       return;
+    }
+    if (panGestureRef.current && panGestureRef.current.pointerId === event.pointerId && !gestureRef.current) {
+      const dx = event.clientX - panGestureRef.current.x; const dy = event.clientY - panGestureRef.current.y;
+      onViewportPan?.({ x: panGestureRef.current.start.x + dx, y: panGestureRef.current.start.y + dy });
+      event.preventDefault(); return;
     }
     const resolved = resolvePlanPoint(event);
     setHoverSnap(resolved);
@@ -324,6 +333,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     setGesture((current) => ({ ...current, end: resolved.point }));
   };
   const pointerUp = (event) => {
+    if (panGestureRef.current?.pointerId === event.pointerId) panGestureRef.current = null;
     if (pinchRef.current || pinchConsumedRef.current) { pendingTouchSelectionRef.current = null; finishPointer(event); return; }
     if (!gestureRef.current && pendingTouchSelectionRef.current?.pointerId === event.pointerId) {
       const target = pendingTouchSelectionRef.current;
@@ -378,7 +388,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const renderCut = (item, className) => { const q = p(item.x, item.y); const size = Math.max(18, item.width * layout.scale); return item.orientation === 'v' ? <line className={className} x1={q.x} y1={q.y - size / 2} x2={q.x} y2={q.y + size / 2} /> : <line className={className} x1={q.x - size / 2} y1={q.y} x2={q.x + size / 2} y2={q.y} />; };
   const renderOpeningHit = (item) => { const q = p(item.x, item.y); const size = Math.max(28, item.width * layout.scale); return item.orientation === 'v' ? <rect className="opening-hit" x={q.x - 14} y={q.y - size / 2} width="28" height={size} /> : <rect className="opening-hit" x={q.x - size / 2} y={q.y - 14} width={size} height="28" />; };
   const hasManualPileAt = (point) => (shownPlan.piles || []).some((pile) => Math.hypot(pile.x - point.x, pile.y - point.y) <= 0.02);
-  return <svg ref={svgRef} className={`plan-svg tool-${tool}`} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label="Редактор плана дома" onPointerDownCapture={pointerDownCapture} onPointerDown={canvasDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerLeave={() => { if (!gestureRef.current) setHoverSnap(null); }} onPointerCancel={(event) => { finishPointer(event); setGesture(null); }}>
+  return <svg ref={svgRef} className={`plan-svg tool-${tool}`} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label="Редактор плана дома" onPointerDownCapture={pointerDownCapture} onPointerDown={canvasDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerLeave={() => { if (!gestureRef.current) setHoverSnap(null); }} onPointerCancel={(event) => { panGestureRef.current = null; finishPointer(event); setGesture(null); }}>
     <defs><pattern id="planner-small-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="#617064" strokeOpacity=".13" /></pattern><pattern id="planner-grid" width="50" height="50" patternUnits="userSpaceOnUse"><rect width="50" height="50" fill="url(#planner-small-grid)" /><path d="M50 0H0V50" fill="none" stroke="#4d6250" strokeOpacity=".22" /></pattern><marker id="planner-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="currentColor" /></marker></defs>
     <rect className="plan-grid-hit" width={VIEW.width} height={VIEW.height} fill="url(#planner-grid)" />
     {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - 5}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + 13}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
@@ -469,9 +479,21 @@ function Inspector({ plan, selected, commitPlan, issues, setSelected }) {
 }
 
 
+function PileIcon(props) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M7 4h10v3H7z"/><path d="M10 7v10l2 3 2-3V7"/><path d="M10.2 16.8h3.6"/></svg>;
+}
+function PileRowIcon(props) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 5h18v3H3z"/><path d="M7 8v8l1 3 1-3V8"/><path d="M11 8v8l1 3 1-3V8"/><path d="M16 8v8l1 3 1-3V8"/></svg>;
+}
+function RoofMarkIcon(props) {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 15 10 8l3 3"/><path d="M7 17 12 11l7 6"/><path d="M15 8h3v4"/></svg>;
+}
+
 const MOBILE_TOOLS = [
-  ['select', 'Выбрать', MousePointer2], ['room', 'Комната', SquareDashed], ['wall', 'Перегородка', BrickWall],
-  ['window', 'Окно', PanelsTopLeft], ['door', 'Дверь', DoorOpen], ['bindingLine', 'Обвязка', Layers3], ['dimension', 'Замер', Ruler]
+  ['room', 'Комната', SquareDashed], ['polygon', 'Свободная', Pentagon], ['wall', 'Перегородка', BrickWall],
+  ['gap', 'Разрыв', Scissors], ['window', 'Окно', PanelsTopLeft], ['door', 'Дверь', DoorOpen],
+  ['dimension', 'Размер', Ruler], ['pile', 'Свая', PileIcon], ['pileRow', 'Ряд свай', PileRowIcon],
+  ['bindingLine', 'Обвязка', Layers3], ['terrace', 'Терраса', Fence], ['porch', 'Крыльцо', HousePlus], ['delete', 'Удалить', Trash2]
 ];
 
 const roundDisplay = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -504,10 +526,40 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
     const dx = line.x2 - line.x1; const dy = line.y2 - line.y1; const len = Math.max(.01, Math.hypot(dx, dy)); const next = Math.max(.1, len + delta);
     line.x2 = roundCoord(line.x1 + dx / len * next); line.y2 = roundCoord(line.y1 + dy / len * next);
   });
+  const moveRoomStep = (dx, dy) => {
+    if (!room) return;
+    commitPlan((next) => {
+      const item = (next.rooms || []).find((candidate) => candidate.id === room.id); if (!item) return;
+      const b = boundsOf(roomPoints(item)); const margin = Math.max(0, Number(next.wallThickness) || 0);
+      const others = (next.rooms || []).filter((candidate) => candidate.id !== item.id).map((candidate) => boundsOf(roomPoints(candidate)));
+      let moveX = dx, moveY = dy;
+      const overlapY = (a, c) => Math.min(a.y2, c.y2) - Math.max(a.y, c.y) > 0.03;
+      const overlapX = (a, c) => Math.min(a.x2, c.x2) - Math.max(a.x, c.x) > 0.03;
+      if (dx > 0) {
+        let limit = (next.house.w - margin) - b.x2;
+        for (const o of others) if (overlapY(b,o) && o.x >= b.x2 - 0.001) limit = Math.min(limit, Math.max(0, o.x - b.x2));
+        moveX = Math.max(0, Math.min(dx, limit));
+      } else if (dx < 0) {
+        let limit = b.x - margin;
+        for (const o of others) if (overlapY(b,o) && o.x2 <= b.x + 0.001) limit = Math.min(limit, Math.max(0, b.x - o.x2));
+        moveX = -Math.max(0, Math.min(-dx, limit));
+      }
+      if (dy > 0) {
+        let limit = (next.house.h - margin) - b.y2;
+        for (const o of others) if (overlapX(b,o) && o.y >= b.y2 - 0.001) limit = Math.min(limit, Math.max(0, o.y - b.y2));
+        moveY = Math.max(0, Math.min(dy, limit));
+      } else if (dy < 0) {
+        let limit = b.y - margin;
+        for (const o of others) if (overlapX(b,o) && o.y2 <= b.y + 0.001) limit = Math.min(limit, Math.max(0, b.y - o.y2));
+        moveY = -Math.max(0, Math.min(-dy, limit));
+      }
+      item.points = roomPoints(item).map((point) => ({ x: roundCoord(point.x + moveX), y: roundCoord(point.y + moveY) })); Object.assign(item, boundsOf(item.points));
+    });
+  };
   let title = 'Элемент'; let controls = null;
   if (room) {
     const b = boundsOf(roomPoints(room)); title = `Комната · ${room.name}`;
-    controls = <><MobileStepper label="Ширина" value={b.w} onMinus={() => resizeRoom('w', -step)} onPlus={() => resizeRoom('w', step)} /><MobileStepper label="Длина" value={b.h} onMinus={() => resizeRoom('h', -step)} onPlus={() => resizeRoom('h', step)} /></>;
+    controls = <><label className="mobile-room-name"><span>Название</span><input value={room.name || ''} placeholder="Комната" onChange={(event) => update('rooms', (i) => { i.name = event.target.value || 'Комната'; })} /></label><MobileStepper label="Ширина" value={b.w} onMinus={() => resizeRoom('w', -step)} onPlus={() => resizeRoom('w', step)} /><MobileStepper label="Длина" value={b.h} onMinus={() => resizeRoom('h', -step)} onPlus={() => resizeRoom('h', step)} /></>;
   } else if (opening) {
     title = opening.type === 'window' ? 'Окно' : 'Дверь';
     controls = <><MobileStepper label="Ширина" value={opening.width} onMinus={() => update('openings', (i) => { i.width = Math.max(.3, roundCoord(i.width - step)); })} onPlus={() => update('openings', (i) => { i.width = roundCoord(i.width + step); })} /><MobileStepper label="Высота" value={opening.height} onMinus={() => update('openings', (i) => { i.height = Math.max(.5, roundCoord(i.height - step)); })} onPlus={() => update('openings', (i) => { i.height = roundCoord(i.height + step); })} /></>;
@@ -521,7 +573,7 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected }) {
   } else if (gap) {
     title = 'Разрыв стены'; controls = <MobileStepper label="Ширина" value={gap.width} onMinus={() => update('wallGaps', (i) => { i.width = Math.max(.1, roundCoord(i.width-step)); })} onPlus={() => update('wallGaps', (i) => { i.width = roundCoord(i.width+step); })} />;
   }
-  return <section className="mobile-selection-sheet"><div className="mobile-sheet-grabber" /><header><strong>{title}</strong><button type="button" onClick={() => setSelected(null)}><X /></button></header><div className="mobile-stepper-grid">{controls}</div><details className="mobile-selection-more"><summary>Все параметры <ChevronDown /></summary><div className="mobile-selection-inspector"><Inspector plan={plan} selected={selected} commitPlan={commitPlan} issues={[]} setSelected={setSelected} /></div></details><small>Шаг кнопок: 10 см · значения на экране округляются до 2 знаков</small></section>;
+  return <><section className="mobile-selection-sheet"><div className="mobile-sheet-grabber" /><header><strong>{title}</strong><button type="button" onClick={() => setSelected(null)}><X /></button></header><div className="mobile-stepper-grid">{controls}</div><details className="mobile-selection-more"><summary>Все параметры <ChevronDown /></summary><div className="mobile-selection-inspector"><Inspector plan={plan} selected={selected} commitPlan={commitPlan} issues={[]} setSelected={setSelected} /></div></details><small>Шаг кнопок: 10 см · у стены последний шаг автоматически уменьшается до точного касания</small></section>{room ? <div className="mobile-room-nudge" aria-label="Перемещение комнаты по 10 сантиметров"><button className="up" onClick={() => moveRoomStep(0,-step)}>↑</button><button className="left" onClick={() => moveRoomStep(-step,0)}>←</button><button className="center" disabled>•</button><button className="right" onClick={() => moveRoomStep(step,0)}>→</button><button className="down" onClick={() => moveRoomStep(0,step)}>↓</button></div> : null}</>;
 }
 
 export default function PlanScreen({ onNavigate }) {
@@ -529,7 +581,8 @@ export default function PlanScreen({ onNavigate }) {
   const [tool, setTool] = useState('select');
   const [selected, setSelected] = useState(null);
   const [polygonDraft, setPolygonDraft] = useState([]);
-  const [viewportZoom, setViewportZoom] = useState(() => Math.max(55, Math.min(600, Number(project?.plan?.zoom) || 100)));
+  const [viewportZoom, setViewportZoom] = useState(() => Math.max(35, Math.min(2000, Number(project?.plan?.zoom) || 100)));
+  const [viewportPan, setViewportPan] = useState({ x: 0, y: 0 });
   const [bindingSetupOpen, setBindingSetupOpen] = useState(false);
   const [bindingVerticalRows, setBindingVerticalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingVerticalRows) || 4));
   const [bindingHorizontalRows, setBindingHorizontalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingHorizontalRows) || 5));
@@ -630,13 +683,13 @@ export default function PlanScreen({ onNavigate }) {
     <div className="mobile-plan-top-controls">
       <button className="mobile-float-button" type="button" onClick={() => onNavigate?.('visualization')} aria-label="Выйти из редактора"><ChevronLeft /></button>
       <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoPiles}><Sparkles />Автосваи</button><button type="button" onClick={() => setBindingSetupOpen(true)}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
-      <div className="mobile-zoom-chip"><button type="button" onClick={() => setViewportZoom((z) => Math.max(55,z-10))}><ZoomOut /></button><strong>{viewportZoom}%</strong><button type="button" onClick={() => setViewportZoom((z) => Math.min(600,z+10))}><ZoomIn /></button></div>
+      <div className="mobile-zoom-chip"><button type="button" onClick={() => setViewportZoom((z) => Math.max(35,z-25))}><ZoomOut /></button><strong onClick={() => { setViewportZoom(100); setViewportPan({x:0,y:0}); }} title="Сбросить масштаб">{viewportZoom}%</strong><button type="button" onClick={() => setViewportZoom((z) => Math.min(2000,z+25))}><ZoomIn /></button></div>
       <button className={`mobile-grid-chip ${gridVisible ? 'active' : ''}`} type="button" onClick={() => setGridVisible((v) => !v)}><Grid3X3 /><span>Сетка</span></button>
       <div className="mobile-history-chip"><button type="button" onClick={undo} disabled={!canUndo}><Undo2 /></button><button type="button" onClick={redo} disabled={!canRedo}><Redo2 /></button></div>
       <details className="mobile-view-menu"><summary><Layers3 /><span>Вид</span><ChevronDown /></summary><div><button className="active" type="button"><Check />План</button><button type="button" onClick={() => openVisualMode('3d')}><Box />3D</button><button type="button" onClick={() => openVisualMode('frame')}><Hammer />Каркас</button><button type="button" onClick={() => openVisualMode('sip')}><Layers3 />СИП</button><button type="button" onClick={() => openVisualMode('roof')}><Home />Кровля</button></div></details>
     </div>
-    <aside className="mobile-plan-tools">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</aside>
-    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} /><div className="mobile-pinch-tip">Два пальца: масштаб · до 600%</div></div>
+    <aside className="mobile-plan-tools"><div className="mobile-select-fixed"><button type="button" className={tool==='select'?'active':''} onClick={() => selectTool('select')}><MousePointer2 /><span>Выбор</span></button></div><div className="mobile-tools-scroll">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</div></aside>
+    <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} viewportPan={viewportPan} onViewportPan={setViewportPan} /><div className="mobile-pinch-tip">Два пальца: масштаб и перемещение · до 2000%</div></div>
     {bindingSetupOpen ? <section className="mobile-binding-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автообвязка</strong><small>2 ряда = только крайние линии</small></div><button type="button" onClick={() => setBindingSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Вертикальных рядов" value={bindingVerticalRows} suffix="шт" onMinus={() => setBindingVerticalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingVerticalRows((v) => Math.min(24, Math.round(v)+1))} /><MobileStepper label="Горизонтальных рядов" value={bindingHorizontalRows} suffix="шт" onMinus={() => setBindingHorizontalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingHorizontalRows((v) => Math.min(24, Math.round(v)+1))} /></div><button className="button primary mobile-binding-apply" type="button" onClick={autoBinding}><Sparkles />Построить обвязку</button><p>Ряды распределяются равномерно. После построения любую линию можно поправить вручную.</p></section> : null}
     <MobileSelectionAdjuster plan={plan} selected={selected} commitPlan={commitPlan} setSelected={setSelected} />
   </div>;

@@ -1,0 +1,9 @@
+EFT SIP Mobile M7
+
+1. Распакуйте архив.
+2. Замените содержимое локальной папки EFT-SIP-Mobile файлами из архива.
+3. GitHub Desktop: Commit to main -> Push origin.
+4. Дождитесь успешного GitHub Actions Pages build и обновите приложение на iPhone.
+
+Проверено: npm test = 83/83.
+Production build в текущей среде не запускался: локально отсутствует установленный vite/node_modules. GitHub Actions устанавливает зависимости по package-lock.json перед сборкой.
