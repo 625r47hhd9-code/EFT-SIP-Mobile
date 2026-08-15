@@ -1,0 +1,19 @@
+{
+  "name": "ЭФТ — React-калькулятор СИП-дома",
+  "short_name": "ЭФТ",
+  "description": "План дома, сваи, СИП-панели, крепёж, смета и прайс-лист",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f8f2",
+  "theme_color": "#5d8f32",
+  "icons": [
+    {
+      "src": "./icons/eft-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
