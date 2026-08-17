@@ -503,3 +503,73 @@ button, input, select, textarea { font: inherit; }
   .mobile-template-picker select{width:100%;min-height:36px;padding:0 8px;border:1px solid rgba(80,77,95,.15);border-radius:10px;background:#fff;color:#252430;font-size:11px;font-weight:750}
   .mobile-plan-fullscreen.grid-hidden .plan-grid-hit{fill:#fff!important}
 }
+
+
+/* M7.3: three-stage bottom sheet, movable nudge, readable scalable CAD layers */
+@media(max-width:720px){
+  .mobile-plan-fullscreen .plan-grid-hit{opacity:.52!important}
+  .mobile-plan-fullscreen.grid-hidden .plan-grid-hit{fill:#fbfbfd!important;opacity:1!important}
+  .mobile-plan-fullscreen:not(.grid-hidden) .plan-grid-hit{filter:contrast(1.08)}
+  .mobile-plan-fullscreen .room-name,.mobile-plan-fullscreen .room-dimensions,.mobile-plan-fullscreen .room-area,
+  .mobile-plan-fullscreen .dimension-text,.mobile-plan-fullscreen .outer-dimensions text,
+  .mobile-plan-fullscreen .pile-spacing-text,.mobile-plan-fullscreen .binding-length-text{
+    paint-order:stroke;stroke:#fff;stroke-width:3.5px;stroke-linejoin:round
+  }
+
+  .mobile-plan-fullscreen .wall-band-base{
+    stroke:rgba(255,255,255,.98)!important;stroke-width:10!important;vector-effect:non-scaling-stroke;stroke-linecap:butt
+  }
+  .mobile-plan-fullscreen .wall-band-hatch{
+    stroke:#697067!important;stroke-width:5!important;stroke-dasharray:7 5;opacity:.72;vector-effect:non-scaling-stroke;pointer-events:none
+  }
+  .mobile-plan-fullscreen .standalone-wall.selected{stroke:#8fc63f!important}
+  .mobile-plan-fullscreen .binding-guide-line{stroke:#b27d30!important;stroke-width:4!important;opacity:.9}
+  .mobile-plan-fullscreen .pile-point,.mobile-plan-fullscreen .manual-pile{
+    stroke:#263328!important;stroke-width:2.5!important;paint-order:stroke
+  }
+
+  .dimension-draft line{stroke:#6957e8;stroke-width:2.5;vector-effect:non-scaling-stroke}
+  .dimension-draft circle{fill:#fff;stroke:#6957e8;stroke-width:2.5;vector-effect:non-scaling-stroke}
+  .dimension-draft text{fill:#282633;font-weight:900;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:4px}
+
+  .mobile-selection-sheet{
+    left:14px!important;right:14px!important;bottom:calc(8px + env(safe-area-inset-bottom))!important;
+    overflow:hidden!important;padding:0!important;max-height:min(72dvh,660px)!important;
+    border-radius:24px!important;transition:max-height .22s ease,transform .22s ease!important
+  }
+  .mobile-selection-sheet.mode-peek{left:74px!important;right:74px!important;max-height:64px!important}
+  .mobile-selection-sheet.mode-compact{max-height:min(42dvh,380px)!important}
+  .mobile-selection-sheet.mode-full{max-height:min(73dvh,680px)!important}
+  .mobile-sheet-swipe-handle{
+    width:100%;min-height:62px;padding:7px 14px 8px;border:0;background:rgba(255,255,255,.98);
+    display:flex;flex-direction:column;align-items:center;gap:5px;color:#393746;touch-action:none
+  }
+  .mobile-sheet-peek-copy{width:100%;display:flex;align-items:baseline;justify-content:center;gap:7px;min-width:0}
+  .mobile-sheet-peek-copy strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+  .mobile-sheet-peek-copy small{font-size:10px;color:#8a8794;white-space:nowrap}
+  .mobile-sheet-body{padding:0 14px 14px;overflow:auto;max-height:calc(72dvh - 64px)}
+  .mobile-sheet-body>header{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:3px 0 10px}
+  .mobile-sheet-body>header>div{display:grid;gap:2px}.mobile-sheet-body>header strong{font-size:16px}.mobile-sheet-body>header small{font-size:10px;color:#8b8996}
+  .mobile-sheet-body>header>button{width:34px;height:34px;border:0;border-radius:50%;background:#f2f2f6;display:grid;place-items:center}
+  .mobile-object-facts,.mobile-house-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}
+  .mobile-object-facts span,.mobile-house-summary-grid span{padding:9px 10px;border:1px solid rgba(78,74,96,.1);border-radius:11px;background:#fafafd;color:#7a7785;font-size:9px;display:grid;gap:3px}
+  .mobile-object-facts b,.mobile-house-summary-grid b{color:#272532;font-size:11px}
+  .mobile-house-summary-grid.extended{margin-top:7px}
+  .mobile-full-section-title{margin:13px 0 5px;padding-top:11px;border-top:1px solid rgba(70,66,88,.1);font-size:11px;font-weight:900;color:#5d50b4}
+  .mobile-sheet-full{padding-bottom:6px}
+
+  .mobile-room-nudge.nudge-floating{
+    width:112px;height:112px;transform:translateY(-50%);background:transparent!important;border:0!important;box-shadow:none!important;
+    backdrop-filter:none!important;padding:0!important;gap:5px
+  }
+  .mobile-room-nudge.nudge-floating button{
+    width:36px;height:36px;justify-self:center;align-self:center;border:1px solid rgba(69,66,84,.09)!important;
+    border-radius:11px!important;background:rgba(248,248,251,.94)!important;box-shadow:0 3px 12px rgba(30,27,44,.08);
+    font-size:22px!important
+  }
+  .mobile-room-nudge.nudge-floating .center{
+    background:#8fc63f!important;color:#111!important;border-color:#79b12d!important;cursor:grab;touch-action:none
+  }
+  .mobile-room-nudge.nudge-floating .center span{display:block;font-size:24px;line-height:1;transform:translateY(-2px)}
+  .mobile-room-nudge.nudge-floating .center:active{cursor:grabbing}
+}

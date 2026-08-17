@@ -637,3 +637,11 @@ button:disabled { cursor:not-allowed; opacity:.42; }
 .room-fill.invalid { fill:rgba(255,188,188,.80)!important; stroke:#d83c3c!important; stroke-width:2.5!important; }
 .snap-indicator .snap-halo { fill:rgba(94,143,50,.13); stroke:#5d8f32; stroke-width:2; vector-effect:non-scaling-stroke; }
 .snap-indicator .snap-core { fill:#5d8f32; stroke:#fff; stroke-width:2; vector-effect:non-scaling-stroke; }
+
+
+/* M7.3 structural plan styling */
+.wall-band-base{stroke:#fff;stroke-width:10;vector-effect:non-scaling-stroke}
+.wall-band-hatch{stroke:#6c746e;stroke-width:5;stroke-dasharray:7 5;opacity:.7;vector-effect:non-scaling-stroke}
+.dimension-draft line{stroke:#6657dc;stroke-width:2.5;vector-effect:non-scaling-stroke}
+.dimension-draft circle{fill:#fff;stroke:#6657dc;stroke-width:2.5;vector-effect:non-scaling-stroke}
+.dimension-draft text{fill:#252332;font-weight:900;text-anchor:middle}
