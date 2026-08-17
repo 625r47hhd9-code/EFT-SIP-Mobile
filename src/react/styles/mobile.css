@@ -636,7 +636,29 @@ button, input, select, textarea { font: inherit; }
   .mobile-room-nudge.nudge-floating button{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
   .mobile-room-nudge.nudge-floating button:active{transform:scale(.9)!important}
 }
-\n\n/* M7.5.2: restore visible outer borders, stronger room text zoom, house-like room walls */\n@media(max-width:720px){\n  .mobile-plan-fullscreen .room-fill{fill-opacity:.62!important;stroke:none!important}\n  .mobile-plan-fullscreen .room-name,\n  .mobile-plan-fullscreen .room-dimensions,\n  .mobile-plan-fullscreen .room-area,\n  .mobile-plan-fullscreen .room-ceiling-mode,\n  .mobile-plan-fullscreen .dimension-text,\n  .mobile-plan-fullscreen .outer-dimensions text,\n  .mobile-plan-fullscreen .pile-spacing-text,\n  .mobile-plan-fullscreen .binding-length-text,\n  .mobile-plan-fullscreen .opening-tag{font-size:var(--plan-font-size,15px)!important}\n  .mobile-plan-fullscreen .room-name{font-weight:950!important;stroke:#fff!important;stroke-width:4px!important;fill:#1e2229!important}\n  .mobile-plan-fullscreen .room-dimensions,.mobile-plan-fullscreen .room-area,.mobile-plan-fullscreen .room-ceiling-mode{font-weight:850!important;stroke:#fff!important;stroke-width:3.5px!important;fill:#434c57!important}\n  .mobile-plan-fullscreen .outer-wall-ring{fill:#f7f8f6!important;stroke:none!important;opacity:1!important}\n  .mobile-plan-fullscreen .outer-wall-outer-outline,.mobile-plan-fullscreen .outer-wall-inner-outline{stroke:#79847c!important;stroke-width:1.8!important;opacity:1!important;fill:none!important}\n  .mobile-plan-fullscreen .wall-band-base{stroke:#ffffff!important;stroke-width:9.5!important;opacity:1!important}\n  .mobile-plan-fullscreen .wall-band-core{stroke:#737c76!important;stroke-width:1.9!important;opacity:1!important}\n  .mobile-plan-fullscreen .plan-origin-marker text{font-size:12px!important}\n}\n
+
+
+/* M7.5.2: restore visible outer borders, stronger room text zoom, house-like room walls */
+@media(max-width:720px){
+  .mobile-plan-fullscreen .room-fill{fill-opacity:.62!important;stroke:none!important}
+  .mobile-plan-fullscreen .room-name,
+  .mobile-plan-fullscreen .room-dimensions,
+  .mobile-plan-fullscreen .room-area,
+  .mobile-plan-fullscreen .room-ceiling-mode,
+  .mobile-plan-fullscreen .dimension-text,
+  .mobile-plan-fullscreen .outer-dimensions text,
+  .mobile-plan-fullscreen .pile-spacing-text,
+  .mobile-plan-fullscreen .binding-length-text,
+  .mobile-plan-fullscreen .opening-tag{font-size:var(--plan-font-size,15px)!important}
+  .mobile-plan-fullscreen .room-name{font-weight:950!important;stroke:#fff!important;stroke-width:4px!important;fill:#1e2229!important}
+  .mobile-plan-fullscreen .room-dimensions,.mobile-plan-fullscreen .room-area,.mobile-plan-fullscreen .room-ceiling-mode{font-weight:850!important;stroke:#fff!important;stroke-width:3.5px!important;fill:#434c57!important}
+  .mobile-plan-fullscreen .outer-wall-ring{fill:#f7f8f6!important;stroke:none!important;opacity:1!important}
+  .mobile-plan-fullscreen .outer-wall-outer-outline,.mobile-plan-fullscreen .outer-wall-inner-outline{stroke:#79847c!important;stroke-width:1.8!important;opacity:1!important;fill:none!important}
+  .mobile-plan-fullscreen .wall-band-base{stroke:#ffffff!important;stroke-width:9.5!important;opacity:1!important}
+  .mobile-plan-fullscreen .wall-band-core{stroke:#737c76!important;stroke-width:1.9!important;opacity:1!important}
+  .mobile-plan-fullscreen .plan-origin-marker text{font-size:12px!important}
+}
+
 
 /* M7.5.3 iPhone Safari */
 @media(max-width:720px){
@@ -657,4 +679,17 @@ button, input, select, textarea { font: inherit; }
   .mobile-plan-fullscreen .selected-room-handle{pointer-events:all!important;touch-action:none!important}
   .mobile-plan-fullscreen .vertex-handle,.mobile-plan-fullscreen .endpoint-handle{touch-action:none!important}
 }
-\n\n/* M7.5.4 visible release marker for Safari/PWA cache checks */\n@media(max-width:720px){\n  .mobile-release-badge{\n    position:absolute;top:5px;right:7px;z-index:140;\n    min-width:38px;height:18px;padding:0 5px;box-sizing:border-box;\n    border:1px solid rgba(72,78,88,.16);border-radius:7px;\n    background:rgba(255,255,255,.82);backdrop-filter:blur(8px);\n    color:#59616a;font-size:8px;font-weight:900;line-height:16px;\n    text-align:center;letter-spacing:.02em;pointer-events:none;\n    box-shadow:0 2px 8px rgba(20,24,30,.06);\n  }\n}\n
+
+
+/* M7.5.4 visible release marker for Safari/PWA cache checks */
+@media(max-width:720px){
+  .mobile-release-badge{
+    position:absolute;top:5px;right:7px;z-index:140;
+    min-width:38px;height:18px;padding:0 5px;box-sizing:border-box;
+    border:1px solid rgba(72,78,88,.16);border-radius:7px;
+    background:rgba(255,255,255,.82);backdrop-filter:blur(8px);
+    color:#59616a;font-size:8px;font-weight:900;line-height:16px;
+    text-align:center;letter-spacing:.02em;pointer-events:none;
+    box-shadow:0 2px 8px rgba(20,24,30,.06);
+  }
+}

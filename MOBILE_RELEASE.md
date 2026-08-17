@@ -1,14 +1,10 @@
-# EFT SIP Mobile M7.5.5
+# EFT SIP Mobile M7.5.6
 
-Исправление обновлений GitHub Pages / iPhone PWA:
+Критическое исправление GitHub Pages build:
 
-- новый Service Worker cache key `eft-sip-mobile-m7-5-5`;
-- HTML, JS и CSS всегда загружаются network-first с `cache: no-store`;
-- старые Cache Storage автоматически удаляются при активации нового Service Worker;
-- регистрация Service Worker выполняется с `updateViaCache: none`;
-- при запуске приложение принудительно вызывает `registration.update()`;
-- при смене контролирующего Service Worker страница автоматически перезагружается;
-- пока приложение открыто, обновление проверяется раз в минуту;
-- индикатор редактора плана обновлён до `M7.5.5`.
-
-Это сделано специально для частых тестовых релизов через GitHub Pages и установленного приложения на iPhone.
+- удалены буквальные escape-последовательности `\n` из CSS;
+- PostCSS снова получает корректный CSS;
+- release badge: M7.5.6;
+- Service Worker cache key обновлён до `eft-sip-mobile-m7-5-6`;
+- PWA update token обновлён до `m7.5.6`;
+- сохранены Safari-фиксы выбора комнат и все изменения редактора.
