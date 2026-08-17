@@ -125,3 +125,12 @@ test('polygon closes only after three points when the pointer returns to the fir
   assert.equal(shouldClosePolygon(points, { x: 2, y: 2 }), false);
   assert.equal(shouldClosePolygon(points.slice(0, 2), { x: 1, y: 1 }), false);
 });
+
+
+test('snap resolver can disable grid rounding for live finger tools', () => {
+  const axes = { xs: [], ys: [], points: [] };
+  const free = snapPointDetails({ x: 1.237, y: 4.684 }, axes, { grid: false, tolerance: 0.05, pointTolerance: 0.08 });
+  assert.equal(free.point.x, 1.237);
+  assert.equal(free.point.y, 4.684);
+  assert.equal(free.snap, null);
+});

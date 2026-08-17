@@ -657,3 +657,6 @@ button:disabled { cursor:not-allowed; opacity:.42; }
 .outer-wall-base{stroke:#fff!important}
 .outer-wall-outline{stroke:#9aa39a!important}
 .room-name,.room-dimensions,.room-area,.dimension-text,.outer-dimensions text{paint-order:stroke;stroke:#fff}
+
+.outer-wall-ring{fill:url(#structural-hatch);stroke:none;opacity:.78}
+.outer-wall-outline{fill:none;stroke:#8e9890;stroke-width:1.5;vector-effect:non-scaling-stroke}

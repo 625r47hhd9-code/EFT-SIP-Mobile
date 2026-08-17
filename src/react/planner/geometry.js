@@ -74,7 +74,9 @@ export function collectSnapAxes(plan, excludeRoomId) {
 }
 
 export function snapPointDetails(point, axes, options = {}) {
-  const grid = Number(options.grid) || 0.1;
+  const hasGridOption = Object.prototype.hasOwnProperty.call(options, 'grid');
+  const requestedGrid = Number(options.grid);
+  const grid = hasGridOption ? (Number.isFinite(requestedGrid) && requestedGrid > 0 ? requestedGrid : null) : 0.1;
   const tolerance = Number(options.tolerance) || 0.16;
   const pointTolerance = Number(options.pointTolerance) || tolerance * 1.5;
   let closestPoint = null; let closestDistance = pointTolerance;
@@ -87,7 +89,7 @@ export function snapPointDetails(point, axes, options = {}) {
     return { point: snapped, snap: { kind: 'node', ...snapped, distance: roundCoord(closestDistance) } };
   }
   const snapValue = (value, candidates) => {
-    let best = Math.round(value / grid) * grid;
+    let best = grid ? Math.round(value / grid) * grid : value;
     let distance = tolerance;
     let matched = false;
     for (const candidate of candidates) {

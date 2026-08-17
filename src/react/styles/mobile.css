@@ -611,3 +611,28 @@ button, input, select, textarea { font: inherit; }
   .mobile-plan-fullscreen .outer-wall-outline{stroke:#9aa39a!important;opacity:.95!important}
   .mobile-plan-fullscreen .mobile-room-nudge button{touch-action:manipulation}
 }
+
+
+/* M7.5.1 expert pass */
+@media(max-width:720px){
+  .mobile-plan-fullscreen .plan-grid-hit{opacity:.72!important;pointer-events:all}
+  .mobile-plan-fullscreen .room-fill{fill-opacity:.58}
+  .mobile-plan-fullscreen .room-name,
+  .mobile-plan-fullscreen .room-dimensions,
+  .mobile-plan-fullscreen .room-area,
+  .mobile-plan-fullscreen .room-ceiling-mode,
+  .mobile-plan-fullscreen .dimension-text,
+  .mobile-plan-fullscreen .outer-dimensions text,
+  .mobile-plan-fullscreen .pile-spacing-text,
+  .mobile-plan-fullscreen .binding-length-text,
+  .mobile-plan-fullscreen .opening-tag{font-size:var(--plan-font-size,14px)!important}
+  .mobile-plan-fullscreen .room-name{font-weight:900!important;fill:#20242d!important;stroke:#fff!important;stroke-width:3.5px!important}
+  .mobile-plan-fullscreen .room-dimensions,.mobile-plan-fullscreen .room-area{font-weight:800!important;fill:#414955!important;stroke:#fff!important;stroke-width:3px!important}
+  .mobile-plan-fullscreen .outer-wall-ring{fill:url(#structural-hatch)!important;stroke:none!important;opacity:.78!important}
+  .mobile-plan-fullscreen .outer-wall-outline{stroke:#8e9890!important;stroke-width:1.5!important;fill:none!important;opacity:.95!important}
+  .mobile-plan-fullscreen .outer-wall,.mobile-plan-fullscreen .outer-wall-base,.mobile-plan-fullscreen .outer-wall-hatch,.mobile-plan-fullscreen .outer-wall-fill{display:none!important}
+  .mobile-plan-fullscreen .wall-band-base{stroke:#fcfcfc!important;stroke-width:10!important}
+  .mobile-plan-fullscreen .wall-band-core{stroke:#8d9690!important;stroke-width:1.6!important;stroke-dasharray:none!important}
+  .mobile-room-nudge.nudge-floating button{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+  .mobile-room-nudge.nudge-floating button:active{transform:scale(.9)!important}
+}
