@@ -660,3 +660,13 @@ button:disabled { cursor:not-allowed; opacity:.42; }
 
 .outer-wall-ring{fill:url(#structural-hatch);stroke:none;opacity:.78}
 .outer-wall-outline{fill:none;stroke:#8e9890;stroke-width:1.5;vector-effect:non-scaling-stroke}
+
+.outer-wall-outer-outline,.outer-wall-inner-outline{fill:none;stroke:#7f887f;stroke-width:1.7;vector-effect:non-scaling-stroke;opacity:.96}
+.room-fill{stroke:none}
+
+
+/* M7.5.3 Safari pointer routing */
+.room-touch-hit{fill:rgba(0,0,0,.001);stroke:none;pointer-events:all;cursor:pointer}
+.unified-wall-band,.outer-wall-structure{pointer-events:none}
+.unified-wall-band *,.outer-wall-structure *{pointer-events:none}
+.room-object{pointer-events:all}

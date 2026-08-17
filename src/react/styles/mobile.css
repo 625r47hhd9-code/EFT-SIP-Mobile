@@ -636,3 +636,24 @@ button, input, select, textarea { font: inherit; }
   .mobile-room-nudge.nudge-floating button{touch-action:none!important;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
   .mobile-room-nudge.nudge-floating button:active{transform:scale(.9)!important}
 }
+\n\n/* M7.5.2: restore visible outer borders, stronger room text zoom, house-like room walls */\n@media(max-width:720px){\n  .mobile-plan-fullscreen .room-fill{fill-opacity:.62!important;stroke:none!important}\n  .mobile-plan-fullscreen .room-name,\n  .mobile-plan-fullscreen .room-dimensions,\n  .mobile-plan-fullscreen .room-area,\n  .mobile-plan-fullscreen .room-ceiling-mode,\n  .mobile-plan-fullscreen .dimension-text,\n  .mobile-plan-fullscreen .outer-dimensions text,\n  .mobile-plan-fullscreen .pile-spacing-text,\n  .mobile-plan-fullscreen .binding-length-text,\n  .mobile-plan-fullscreen .opening-tag{font-size:var(--plan-font-size,15px)!important}\n  .mobile-plan-fullscreen .room-name{font-weight:950!important;stroke:#fff!important;stroke-width:4px!important;fill:#1e2229!important}\n  .mobile-plan-fullscreen .room-dimensions,.mobile-plan-fullscreen .room-area,.mobile-plan-fullscreen .room-ceiling-mode{font-weight:850!important;stroke:#fff!important;stroke-width:3.5px!important;fill:#434c57!important}\n  .mobile-plan-fullscreen .outer-wall-ring{fill:#f7f8f6!important;stroke:none!important;opacity:1!important}\n  .mobile-plan-fullscreen .outer-wall-outer-outline,.mobile-plan-fullscreen .outer-wall-inner-outline{stroke:#79847c!important;stroke-width:1.8!important;opacity:1!important;fill:none!important}\n  .mobile-plan-fullscreen .wall-band-base{stroke:#ffffff!important;stroke-width:9.5!important;opacity:1!important}\n  .mobile-plan-fullscreen .wall-band-core{stroke:#737c76!important;stroke-width:1.9!important;opacity:1!important}\n  .mobile-plan-fullscreen .plan-origin-marker text{font-size:12px!important}\n}\n
+
+/* M7.5.3 iPhone Safari */
+@media(max-width:720px){
+  .mobile-plan-stage,.mobile-plan-stage .plan-svg{
+    touch-action:none!important;
+    overscroll-behavior:none!important;
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+  }
+  .mobile-plan-fullscreen .room-touch-hit{pointer-events:all!important;touch-action:none!important;fill:rgba(0,0,0,.001)!important}
+  .mobile-plan-fullscreen .unified-wall-band,
+  .mobile-plan-fullscreen .unified-wall-band *,
+  .mobile-plan-fullscreen .outer-wall-structure,
+  .mobile-plan-fullscreen .outer-wall-structure *{pointer-events:none!important}
+  .mobile-plan-fullscreen .room-object{pointer-events:all!important}
+  .mobile-plan-fullscreen .selected-room-overlay{pointer-events:none!important}
+  .mobile-plan-fullscreen .selected-room-handle{pointer-events:all!important;touch-action:none!important}
+  .mobile-plan-fullscreen .vertex-handle,.mobile-plan-fullscreen .endpoint-handle{touch-action:none!important}
+}

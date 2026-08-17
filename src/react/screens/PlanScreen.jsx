@@ -230,6 +230,17 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const unifiedWalls = useMemo(() => unifiedWallSegments(shownPlan), [shownPlan]);
   const issueRooms = useMemo(() => new Set(issues.flatMap((issue) => issue.roomIds || [])), [issues]);
   const p = useCallback((x, y) => ({ x: layout.ox + x * layout.scale, y: layout.oy + y * layout.scale }), [layout]);
+  const interiorBiasedPoint = useCallback((point, mode = tool) => {
+    if (!['room', 'polygon'].includes(mode)) return point;
+    const wall = Number(plan.wallThickness) || 0.174;
+    const tol = Math.max(0.18, wall * 1.6);
+    let { x, y } = point;
+    if (x >= -tol && x <= wall + tol) x = wall;
+    else if (x >= plan.house.w - wall - tol && x <= plan.house.w + tol) x = plan.house.w - wall;
+    if (y >= -tol && y <= wall + tol) y = wall;
+    else if (y >= plan.house.h - wall - tol && y <= plan.house.h + tol) y = plan.house.h - wall;
+    return { x: roundCoord(x), y: roundCoord(y) };
+  }, [plan, tool]);
   const rawPlanPoint = (event) => {
     const svg = svgRef.current;
     const matrix = svg?.getScreenCTM?.();
@@ -269,6 +280,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const magneticPoint = (event, mode = tool) => {
     const raw = rawPlanPoint(event);
     const current = gestureRef.current;
+    const baseRaw = interiorBiasedPoint(raw, mode);
     const axes = collectSnapAxes(plan, current?.type === 'room' ? current.id : null);
     if (current?.kind === 'draw' && current.start) {
       axes.xs.push(current.start.x); axes.ys.push(current.start.y); axes.points.push(current.start);
@@ -286,14 +298,13 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     const profile = profiles[mode] || { tolerance: .12, pointTolerance: .18, grid: .1 };
     const options = { tolerance: profile.tolerance, pointTolerance: profile.pointTolerance };
     if (profile.grid != null) options.grid = profile.grid;
-    return { raw, ...snapPointDetails(raw, axes, options) };
+    return { raw: baseRaw, ...snapPointDetails(baseRaw, axes, options) };
   };
   const begin = (event, value) => {
     event.preventDefault(); event.stopPropagation(); window.getSelection?.()?.removeAllRanges();
     svgRef.current.setPointerCapture?.(event.pointerId);
     const resolved = magneticPoint(event, value.type);
-    const useMagnet = Boolean(resolved.snap);
-    const start = ['pileRow','bindingLine'].includes(value.type) ? (useMagnet ? resolved.point : resolved.raw) : resolved.point;
+    const start = ['pileRow','bindingLine','wall','dimension'].includes(value.type) ? resolved.raw : resolved.point;
     setGesture({ ...value, pointerId: event.pointerId, start, end: start, snap: resolved.snap || null });
   };
   const deleteObject = (type, id) => commitPlan((next) => {
@@ -301,12 +312,16 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     next[key] = (next[key] || []).filter((item) => item.id !== id);
   });
   const objectDown = (event, type, id, extra = {}) => {
-    if (tool === 'delete') { event.stopPropagation(); deleteObject(type, id); setSelected(null); return; }
+    if (tool === 'delete') { event.preventDefault(); event.stopPropagation(); deleteObject(type, id); setSelected(null); return; }
     if (tool !== 'select') return;
-    if (event.pointerType === 'touch') {
-      event.stopPropagation();
-      if (selected?.type === type && selected?.id === id) { begin(event, { kind: extra.kind || 'move', type, id, index: extra.index }); return; }
-      pendingTouchSelectionRef.current = { type, id, pointerId: event.pointerId };
+    event.preventDefault(); event.stopPropagation();
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      pendingTouchSelectionRef.current = null;
+      if (selected?.type === type && selected?.id === id) {
+        begin(event, { kind: extra.kind || 'move', type, id, index: extra.index });
+        return;
+      }
+      selectExisting({ type, id });
       return;
     }
     selectExisting({ type, id }); begin(event, { kind: extra.kind || 'move', type, id, index: extra.index });
@@ -396,9 +411,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     if (panGestureRef.current?.pointerId === event.pointerId) panGestureRef.current = null;
     if (pinchRef.current || pinchConsumedRef.current) { pendingTouchSelectionRef.current = null; finishPointer(event); return; }
     if (!gestureRef.current && pendingTouchSelectionRef.current?.pointerId === event.pointerId) {
-      const target = pendingTouchSelectionRef.current;
       pendingTouchSelectionRef.current = null;
-      selectExisting({ type: target.type, id: target.id });
       finishPointer(event);
       return;
     }
@@ -443,16 +456,16 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const horizontalY = layout.sides.horizontal === 'top' ? p(0, footprint.minY).y - 30 : p(0, footprint.maxY).y + 30;
   const verticalX = layout.sides.vertical === 'left' ? p(footprint.minX, 0).x - 30 : p(footprint.maxX, 0).x + 30;
   const line = (item) => ({ a: p(item.x1, item.y1), b: p(item.x2, item.y2) });
-  const textScale = Math.max(1.15, Math.min(5.2, layout.scale / 34));
-  const roomNameSize = Math.max(19, 15.5 * textScale);
-  const roomMetaSize = Math.max(14.5, 11.8 * textScale);
-  const technicalTextSize = Math.max(12.5, 10.8 * textScale);
-  const dimensionTextSize = Math.max(14.5, 12 * textScale);
+  const zoomTextScale = Math.max(1, Math.min(7, (viewportZoom ?? plan.zoom ?? 100) / 100));
+  const roomNameSize = Math.max(19, Math.min(88, 17 * zoomTextScale));
+  const roomMetaSize = Math.max(15, Math.min(70, 13.2 * zoomTextScale));
+  const technicalTextSize = Math.max(12.5, Math.min(52, 11.5 * zoomTextScale));
+  const dimensionTextSize = Math.max(14.5, Math.min(64, 12.5 * zoomTextScale));
     const selectedRoom = selected?.type === 'room' ? (shownPlan.rooms || []).find((room) => room.id === selected.id) : null;
   const selectedRoomScreen = selectedRoom ? roomPoints(selectedRoom).map((point) => p(point.x, point.y)) : [];
   const drawSegment = (segment, key) => {
     const [a, b] = lineEndpoints(segment); const q1 = p(a.x, a.y); const q2 = p(b.x, b.y);
-    return <g key={key} className="wall-band"><line className="wall-band-base" x1={q1.x} y1={q1.y} x2={q2.x} y2={q2.y} /><line className="wall-band-core" x1={q1.x} y1={q1.y} x2={q2.x} y2={q2.y} /></g>;
+    return <g key={key} className="wall-band unified-wall-band"><line className="wall-band-base" x1={q1.x} y1={q1.y} x2={q2.x} y2={q2.y} /><line className="wall-band-core" x1={q1.x} y1={q1.y} x2={q2.x} y2={q2.y} /></g>;
   };
   const renderCut = (item, className) => { const q = p(item.x, item.y); const size = Math.max(18, item.width * layout.scale); return item.orientation === 'v' ? <line className={className} x1={q.x} y1={q.y - size / 2} x2={q.x} y2={q.y + size / 2} /> : <line className={className} x1={q.x - size / 2} y1={q.y} x2={q.x + size / 2} y2={q.y} />; };
   const renderOpeningHit = (item) => { const q = p(item.x, item.y); const size = Math.max(28, item.width * layout.scale); return item.orientation === 'v' ? <rect className="opening-hit" x={q.x - 14} y={q.y - size / 2} width="28" height={size} /> : <rect className="opening-hit" x={q.x - size / 2} y={q.y - 14} width={size} height="28" />; };
@@ -461,7 +474,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const activeDrawStart = activeDraw ? p(activeDraw.start.x, activeDraw.start.y) : null;
   const activeDrawEnd = activeDraw ? p(activeDraw.end.x, activeDraw.end.y) : null;
   const snapLabel = activeDraw?.snap ? (activeDraw.snap.kind === 'node' ? 'Узел' : activeDraw.snap.kind === 'intersection' ? 'Пересечение' : 'Стена / ось') : null;
-  return <svg ref={svgRef} className={`plan-svg tool-${tool}`} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label="Редактор плана дома" onPointerDownCapture={pointerDownCapture} onPointerDown={canvasDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerLeave={() => { if (!gestureRef.current) setHoverSnap(null); }} onPointerCancel={(event) => { panGestureRef.current = null; finishPointer(event); setGesture(null); }}>
+  return <svg ref={svgRef} className={`plan-svg tool-${tool}`} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Редактор плана дома" onPointerDownCapture={pointerDownCapture} onPointerDown={canvasDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerLeave={() => { if (!gestureRef.current) setHoverSnap(null); }} onPointerCancel={(event) => { panGestureRef.current = null; pendingTouchSelectionRef.current = null; finishPointer(event); setGesture(null); }} onLostPointerCapture={(event) => { if (event.pointerType === 'touch') { activePointersRef.current.delete(event.pointerId); if (activePointersRef.current.size < 2) pinchRef.current = null; } }}>
     <defs>
       <pattern id="planner-minor-grid" x={((layout.ox % Math.max(4,layout.scale/10)) + Math.max(4,layout.scale/10)) % Math.max(4,layout.scale/10)} y={((layout.oy % Math.max(4,layout.scale/10)) + Math.max(4,layout.scale/10)) % Math.max(4,layout.scale/10)} width={Math.max(4,layout.scale/10)} height={Math.max(4,layout.scale/10)} patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#7b837d" fillOpacity=".22" /></pattern>
       <pattern id="planner-grid" x={((layout.ox % layout.scale) + layout.scale) % layout.scale} y={((layout.oy % layout.scale) + layout.scale) % layout.scale} width={layout.scale} height={layout.scale} patternUnits="userSpaceOnUse"><rect width={layout.scale} height={layout.scale} fill="url(#planner-minor-grid)" /><path d={`M ${layout.scale} 0 H 0 V ${layout.scale}`} fill="none" stroke="#67736b" strokeOpacity=".32" strokeWidth="1.2" /></pattern>
@@ -471,7 +484,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     <rect className="plan-grid-hit" x={-VIEW.width*8} y={-VIEW.height*8} width={VIEW.width*17} height={VIEW.height*17} fill="url(#planner-grid)" />
     {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - 5}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + 13}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
     <rect className="house-fill" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} />
-    {(shownPlan.rooms || []).map((room, roomIndex) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'room', room.id)}><polygon className={`room-fill room-tone-${roomIndex % 6} ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><text className="room-name" style={{'--plan-font-size': `${roomNameSize}px`}} x={center.x} y={center.y - roomMetaSize*.95}>{room.name}</text><text className="room-dimensions" style={{'--plan-font-size': `${roomMetaSize}px`}} x={center.x} y={center.y + roomMetaSize*.55}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" style={{'--plan-font-size': `${roomMetaSize}px`}} x={center.x} y={center.y + roomMetaSize*1.85}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" style={{'--plan-font-size': `${Math.max(12,roomMetaSize)}px`}} x={center.x} y={center.y + roomMetaSize*3.0}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
+    {(shownPlan.rooms || []).map((room, roomIndex) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object room-object"><polygon className={`room-fill room-tone-${roomIndex % 6} ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><polygon className="room-touch-hit" points={screen.map((point) => `${point.x},${point.y}`).join(' ')} onPointerDown={(event) => objectDown(event, 'room', room.id)} /><text className="room-name" style={{'--plan-font-size': `${roomNameSize}px`}} x={center.x} y={center.y - roomMetaSize*.95}>{room.name}</text><text className="room-dimensions" style={{'--plan-font-size': `${roomMetaSize}px`}} x={center.x} y={center.y + roomMetaSize*.55}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" style={{'--plan-font-size': `${roomMetaSize}px`}} x={center.x} y={center.y + roomMetaSize*1.85}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" style={{'--plan-font-size': `${Math.max(12,roomMetaSize)}px`}} x={center.x} y={center.y + roomMetaSize*3.0}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
     {(() => {
       const wallBand = Math.max(10, shownPlan.wallThickness * layout.scale);
       const outerX = topLeft.x - wallBand / 2, outerY = topLeft.y - wallBand / 2;
@@ -479,7 +492,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       const innerX = topLeft.x + wallBand / 2, innerY = topLeft.y + wallBand / 2;
       const innerW = Math.max(1, shownPlan.house.w * layout.scale - wallBand), innerH = Math.max(1, shownPlan.house.h * layout.scale - wallBand);
       const ring = `M ${outerX} ${outerY} H ${outerX + outerW} V ${outerY + outerH} H ${outerX} Z M ${innerX} ${innerY} H ${innerX + innerW} V ${innerY + innerH} H ${innerX} Z`;
-      return <g className="outer-wall-structure"><path className="outer-wall-ring" d={ring} fillRule="evenodd" /><rect className="outer-wall-outline" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} /></g>;
+      return <g className="outer-wall-structure"><path className="outer-wall-ring" d={ring} fillRule="evenodd" /><rect className="outer-wall-outer-outline" x={outerX} y={outerY} width={outerW} height={outerH} /><rect className="outer-wall-inner-outline" x={innerX} y={innerY} width={innerW} height={innerH} /></g>;
     })()}
     {unifiedWalls.map((segment, index) => drawSegment(segment, `unified-${index}`))}
     {selectedRoom ? <g className="selected-room-overlay"><polygon className="selected-room-outline" points={selectedRoomScreen.map((point) => `${point.x},${point.y}`).join(' ')} />{selectedRoomScreen.map((point, index) => <circle key={index} className="vertex-handle selected-room-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', selectedRoom.id, { kind: 'vertex', index })} />)}</g> : null}
