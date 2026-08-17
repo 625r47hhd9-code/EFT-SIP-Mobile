@@ -573,3 +573,20 @@ button, input, select, textarea { font: inherit; }
   .mobile-room-nudge.nudge-floating .center span{display:block;font-size:24px;line-height:1;transform:translateY(-2px)}
   .mobile-room-nudge.nudge-floating .center:active{cursor:grabbing}
 }
+
+
+/* M7.4 — finger-first navigation and clearer construction drawing */
+@media(max-width:720px){
+  .mobile-plan-stage .plan-svg{background:#fafbfa}
+  .mobile-plan-fullscreen:not(.grid-hidden) .plan-grid-hit{opacity:1!important}
+  .mobile-plan-fullscreen.grid-hidden .plan-grid-hit{fill:#fafbfa!important}
+  .outer-wall-base{fill:none!important;stroke:#fff!important;vector-effect:non-scaling-stroke}
+  .outer-wall-hatch{fill:none!important;opacity:.95;vector-effect:non-scaling-stroke}
+  .outer-wall-outline{fill:none;stroke:#687169;stroke-width:1.5;opacity:.95;vector-effect:non-scaling-stroke}
+  .mobile-plan-fullscreen .wall-band-base{stroke:#fff!important;stroke-width:10!important;stroke-linecap:butt!important;vector-effect:non-scaling-stroke}
+  .mobile-plan-fullscreen .wall-band-core{stroke:#727a74!important;stroke-width:1.8!important;stroke-dasharray:none!important;opacity:.95;vector-effect:non-scaling-stroke}
+  .plan-origin-marker{pointer-events:none}.plan-origin-marker circle{fill:#8fc63f;stroke:#fff;stroke-width:2;vector-effect:non-scaling-stroke}.plan-origin-marker path{stroke:#79827b;stroke-width:1;opacity:.65;vector-effect:non-scaling-stroke}.plan-origin-marker text{font-size:10px;font-weight:850;fill:#69716b;paint-order:stroke;stroke:#fff;stroke-width:3px}
+  .finger-draw-guide{pointer-events:none}.finger-draw-guide>line{stroke:#5f6962;stroke-width:1.5;opacity:.7;vector-effect:non-scaling-stroke}.finger-draw-guide.snapped>line{stroke:#78a92f;stroke-width:2.5}.draw-start-dot{fill:#111;stroke:#fff;stroke-width:2.5;vector-effect:non-scaling-stroke}.draw-end-dot{fill:#fff;stroke:#111;stroke-width:2.5;vector-effect:non-scaling-stroke}.finger-draw-guide.snapped .draw-end-dot{fill:#8fc63f;stroke:#fff}.snap-pill rect{fill:rgba(255,255,255,.97);stroke:#93bf51;stroke-width:1;vector-effect:non-scaling-stroke}.snap-pill text{text-anchor:middle;font-size:10px;font-weight:900;fill:#436f1f}
+  .mobile-pinch-tip{max-width:min(76vw,390px)!important;padding:9px 13px!important;line-height:1.3!important;font-size:10px!important;text-align:center!important;white-space:normal!important}
+  .pile-guide{stroke:#d09c35!important;stroke-width:2.2!important;stroke-dasharray:none!important}.binding-guide-line{stroke:#a97328!important;stroke-width:4!important}
+}
