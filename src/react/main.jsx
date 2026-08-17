@@ -4,6 +4,7 @@ import { App } from './app/App.jsx';
 import { ProjectProvider } from './state/ProjectContext.jsx';
 import './styles/app.css';
 import './styles/mobile.css';
+import { registerFreshServiceWorker } from '../register-service-worker.js';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -13,6 +14,5 @@ createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
-}
+
+registerFreshServiceWorker();

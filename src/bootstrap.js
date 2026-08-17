@@ -1,3 +1,4 @@
+import { registerFreshServiceWorker } from './register-service-worker.js';
 import {
   createPriceCatalogPayload,
   createProjectPayload,
@@ -23,10 +24,5 @@ window.EFTStorage = {
 document.documentElement.dataset.eftApp = 'vite-pwa';
 window.dispatchEvent(new CustomEvent('eft-storage-ready'));
 
-if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((error) => {
-      console.warn('Service worker registration failed', error);
-    });
-  });
-}
+
+registerFreshServiceWorker();
