@@ -19,6 +19,7 @@ import {
 } from '../planner/geometry.js';
 
 const VIEW = { width: 1100, height: 760 };
+const MOBILE_RELEASE_LABEL = 'M7.5.4';
 const SKETCHES_KEY = 'eft-react-plan-sketches-v47';
 const DRAW_TOOLS = new Set(['room', 'wall', 'dimension', 'pileRow', 'bindingLine', 'terrace', 'porch']);
 const TOOLS = [
@@ -853,6 +854,7 @@ export default function PlanScreen({ onNavigate }) {
   }, [selected, commitPlan]);
   const toolHint = tool === 'select' ? 'Один палец — выбрать/править. Два пальца — только масштаб и перемещение поля.' : tool === 'room' ? 'Коснитесь первого угла и тяните. Край комнаты сам прилипнет к наружной стене, перегородке, узлу или сетке — миллиметры ловить не нужно.' : tool === 'polygon' ? 'Ставьте углы комнаты. Узлы магнитятся к стенам и сетке. После третьей точки нажмите первую точку.' : tool === 'dimension' ? 'Нажмите первую точку, затем вторую. Размер привяжется к узлам и сетке.' : tool === 'pileRow' ? 'Первый конец начинается под пальцем. Второй идёт за пальцем 1:1; возле узла или оси включается магнит.' : tool === 'bindingLine' ? 'Начало и конец идут за пальцем; возле стен и узлов включается магнитная привязка.' : ['window','door','gap','pile'].includes(tool) ? 'Нажмите точное место установки. Проём выбирает ближайшую стену по месту касания.' : 'Рисуйте пальцем. Магнит включается только рядом со стеной, узлом или осью.';
   const mobileEditor = <div className={`mobile-plan-fullscreen ${gridVisible ? '' : 'grid-hidden'}`}>
+    <div className="mobile-release-badge" aria-label={`Версия ${MOBILE_RELEASE_LABEL}`}>{MOBILE_RELEASE_LABEL}</div>
     <div className="mobile-plan-top-controls">
       <button className="mobile-float-button" type="button" onClick={() => onNavigate?.('visualization')} aria-label="Выйти из редактора"><ChevronLeft /></button>
       <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><label className="mobile-template-picker"><span>Шаблон</span><select value={sketchId} onChange={(event) => setSketchId(event.target.value)}>{sketches.map((sketch) => <option key={sketch.id} value={sketch.id}>{sketch.name}</option>)}</select></label><button type="button" onClick={loadSketch}><PanelsTopLeft />Загрузить шаблон</button><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoPiles}><Sparkles />Автосваи</button><button type="button" onClick={() => setBindingSetupOpen(true)}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
