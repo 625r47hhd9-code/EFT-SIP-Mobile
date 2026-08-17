@@ -649,3 +649,11 @@ button:disabled { cursor:not-allowed; opacity:.42; }
 .wall-band-hatch{display:none!important}
 .wall-band-core{stroke:#727a74;stroke-width:1.8;stroke-dasharray:none;vector-effect:non-scaling-stroke}
 .outer-wall-base{stroke:#fff}.outer-wall-outline{fill:none;stroke:#6b746d;stroke-width:1.5;vector-effect:non-scaling-stroke}
+
+
+/* M7.5 global wall/text overrides */
+.outer-wall{stroke:#fdfdfd!important}
+.outer-wall-fill{fill:rgba(255,255,255,.55)}
+.outer-wall-base{stroke:#fff!important}
+.outer-wall-outline{stroke:#9aa39a!important}
+.room-name,.room-dimensions,.room-area,.dimension-text,.outer-dimensions text{paint-order:stroke;stroke:#fff}

@@ -265,17 +265,19 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       axes.xs.push(current.start.x); axes.ys.push(current.start.y); axes.points.push(current.start);
     }
     const profiles = {
-      room: { tolerance: .28, pointTolerance: .34 },
-      polygon: { tolerance: .22, pointTolerance: .28 },
-      wall: { tolerance: .24, pointTolerance: .30 },
-      pileRow: { tolerance: .08, pointTolerance: .12 },
-      bindingLine: { tolerance: .12, pointTolerance: .16 },
-      terrace: { tolerance: .20, pointTolerance: .24 },
-      porch: { tolerance: .20, pointTolerance: .24 },
-      dimension: { tolerance: .16, pointTolerance: .22 }
+      room: { tolerance: .34, pointTolerance: .38, grid: .1 },
+      polygon: { tolerance: .24, pointTolerance: .30, grid: .1 },
+      wall: { tolerance: .26, pointTolerance: .32, grid: .1 },
+      pileRow: { tolerance: .05, pointTolerance: .08, grid: null },
+      bindingLine: { tolerance: .06, pointTolerance: .10, grid: null },
+      terrace: { tolerance: .22, pointTolerance: .26, grid: .1 },
+      porch: { tolerance: .22, pointTolerance: .26, grid: .1 },
+      dimension: { tolerance: .18, pointTolerance: .24, grid: .1 }
     };
-    const profile = profiles[mode] || { tolerance: .12, pointTolerance: .18 };
-    return { raw, ...snapPointDetails(raw, axes, { grid: .1, tolerance: profile.tolerance, pointTolerance: profile.pointTolerance }) };
+    const profile = profiles[mode] || { tolerance: .12, pointTolerance: .18, grid: .1 };
+    const options = { tolerance: profile.tolerance, pointTolerance: profile.pointTolerance };
+    if (profile.grid != null) options.grid = profile.grid;
+    return { raw, ...snapPointDetails(raw, axes, options) };
   };
   const begin = (event, value) => {
     event.preventDefault(); event.stopPropagation(); window.getSelection?.()?.removeAllRanges();
@@ -432,11 +434,11 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const horizontalY = layout.sides.horizontal === 'top' ? p(0, footprint.minY).y - 30 : p(0, footprint.maxY).y + 30;
   const verticalX = layout.sides.vertical === 'left' ? p(footprint.minX, 0).x - 30 : p(footprint.maxX, 0).x + 30;
   const line = (item) => ({ a: p(item.x1, item.y1), b: p(item.x2, item.y2) });
-  const textScale = Math.max(.85, Math.min(3.2, layout.scale / 55));
-  const roomNameSize = 15 * textScale;
-  const roomMetaSize = 11.5 * textScale;
-  const technicalTextSize = 10.5 * textScale;
-  const dimensionTextSize = 11.5 * textScale;
+  const textScale = Math.max(1.05, Math.min(4.4, layout.scale / 42));
+  const roomNameSize = Math.max(18, 15 * textScale);
+  const roomMetaSize = Math.max(13.5, 11.5 * textScale);
+  const technicalTextSize = Math.max(12, 10.5 * textScale);
+  const dimensionTextSize = Math.max(13.5, 11.5 * textScale);
     const selectedRoom = selected?.type === 'room' ? (shownPlan.rooms || []).find((room) => room.id === selected.id) : null;
   const selectedRoomScreen = selectedRoom ? roomPoints(selectedRoom).map((point) => p(point.x, point.y)) : [];
   const drawSegment = (segment, key) => {
@@ -457,13 +459,14 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       <pattern id="structural-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="#7d857f" strokeWidth="2" strokeOpacity=".34" /></pattern>
       <marker id="planner-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="currentColor" /></marker>
     </defs>
-    <rect className="plan-grid-hit" width={VIEW.width} height={VIEW.height} fill="url(#planner-grid)" />
+    <rect className="plan-grid-hit" x={-VIEW.width*3} y={-VIEW.height*3} width={VIEW.width*7} height={VIEW.height*7} fill="url(#planner-grid)" />
     {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - 5}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + 13}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
     <rect className="house-fill" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} />
-    {(shownPlan.rooms || []).map((room, roomIndex) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'room', room.id)}><polygon className={`room-fill room-tone-${roomIndex % 6} ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><text className="room-name" style={{fontSize:roomNameSize}} x={center.x} y={center.y - roomMetaSize*.8}>{room.name}</text><text className="room-dimensions" style={{fontSize:roomMetaSize}} x={center.x} y={center.y + roomMetaSize*.55}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" style={{fontSize:roomMetaSize}} x={center.x} y={center.y + roomMetaSize*1.8}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" x={center.x} y={center.y + 31}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
+    {(shownPlan.rooms || []).map((room, roomIndex) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'room', room.id)}><polygon className={`room-fill room-tone-${roomIndex % 6} ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><text className="room-name" style={{fontSize:roomNameSize}} x={center.x} y={center.y - roomMetaSize*.95}>{room.name}</text><text className="room-dimensions" style={{fontSize:roomMetaSize}} x={center.x} y={center.y + roomMetaSize*.55}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" style={{fontSize:roomMetaSize}} x={center.x} y={center.y + roomMetaSize*1.85}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" style={{fontSize:Math.max(12,roomMetaSize)}} x={center.x} y={center.y + roomMetaSize*3.0}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
     <g className="outer-wall-structure">
-      <rect className="outer-wall outer-wall-base" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} style={{ strokeWidth: Math.max(10, shownPlan.wallThickness * layout.scale) }} />
-      <rect className="outer-wall outer-wall-hatch" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} style={{ strokeWidth: Math.max(8, shownPlan.wallThickness * layout.scale) }} stroke="url(#structural-hatch)" />
+      <rect className="outer-wall-fill" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} />
+      <rect className="outer-wall outer-wall-base" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} style={{ strokeWidth: Math.max(9, shownPlan.wallThickness * layout.scale) }} />
+      <rect className="outer-wall outer-wall-hatch" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} style={{ strokeWidth: Math.max(7, shownPlan.wallThickness * layout.scale) }} />
       <rect className="outer-wall-outline" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} />
     </g>
     {unifiedWalls.map((segment, index) => drawSegment(segment, `unified-${index}`))}
@@ -614,19 +617,32 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metr
     line.x2 = roundCoord(line.x1 + dx / len * next); line.y2 = roundCoord(line.y1 + dy / len * next);
   });
   const moveRoomExact = (next, item, dx, dy) => {
-    const axes = collectSnapAxes(next, item.id);
-    item.points = movePoints(roomPoints(item), dx, dy, next, axes);
+    const wall = Number(next.wallThickness) || 0.174;
+    const moved = roomPoints(item).map((point) => ({ x: point.x + dx, y: point.y + dy }));
+    let shifted = moved;
+    const b = boundsOf(moved);
+    const minX = wall; const minY = wall; const maxX = next.house.w - wall; const maxY = next.house.h - wall;
+    const shiftX = b.x < minX ? minX - b.x : b.x2 > maxX ? maxX - b.x2 : 0;
+    const shiftY = b.y < minY ? minY - b.y : b.y2 > maxY ? maxY - b.y2 : 0;
+    if (shiftX || shiftY) shifted = moved.map((point) => ({ x: point.x + shiftX, y: point.y + shiftY }));
+    const snapAxes = collectSnapAxes(next, item.id);
+    const bb = boundsOf(shifted);
+    const snapped = snapPoint({ x: bb.x, y: bb.y }, snapAxes);
+    const closeX = Math.abs(snapped.x - bb.x) <= 0.12 ? snapped.x - bb.x : 0;
+    const closeY = Math.abs(snapped.y - bb.y) <= 0.12 ? snapped.y - bb.y : 0;
+    item.points = shifted.map((point) => ({ x: roundCoord(point.x + closeX), y: roundCoord(point.y + closeY) }));
     Object.assign(item, boundsOf(item.points));
   };
   const nudgeSelected = (dx, dy) => commitPlan((next) => {
     if (!selected) return;
     if (selected.type === 'room') { const item = (next.rooms || []).find((candidate) => candidate.id === selected.id); if (item) moveRoomExact(next, item, dx, dy); return; }
     if (selected.type === 'opening') { const item = (next.openings || []).find((candidate) => candidate.id === selected.id); if (!item) return; const target = { x: roundCoord(item.x + dx), y: roundCoord(item.y + dy) }; Object.assign(item, projectOpeningToWall(item, target, next, { lockDoorType: item.doorType === 'garage' })); return; }
-    if (selected.type === 'platform') { const item = (next.platforms || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); } return; }
+    if (selected.type === 'platform') { const item = (next.platforms || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); Object.assign(item, normalizeTerracePlatform(item)); } return; }
     if (selected.type === 'pile' || selected.type === 'gap') { const key = selected.type === 'pile' ? 'piles' : 'wallGaps'; const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); } return; }
     const key = selected.type === 'wall' ? 'walls' : selected.type === 'bindingLine' ? 'bindingLines' : selected.type === 'dimension' ? 'dimensions' : selected.type === 'pileRow' ? 'pileRows' : null;
     if (key) { const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x1 = roundCoord(item.x1 + dx); item.y1 = roundCoord(item.y1 + dy); item.x2 = roundCoord(item.x2 + dx); item.y2 = roundCoord(item.y2 + dy); } }
   });
+  const handleNudge = (dx, dy) => (event) => { event.preventDefault(); event.stopPropagation(); nudgeSelected(dx, dy); };
 
   let title = 'План дома'; let subtitle = `${formatNumber(metrics?.floorArea || plan.house.w*plan.house.h)} м²`;
   let controls = null; let detail = null;
@@ -686,11 +702,11 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metr
       </div> : null}
     </section>
     {canNudge ? <div className="mobile-room-nudge nudge-floating" style={{right:nudgePos.right,top:`${nudgePos.top}%`}}>
-      <button className="up" type="button" onClick={()=>nudgeSelected(0,-step)}>↑</button>
-      <button className="left" type="button" onClick={()=>nudgeSelected(-step,0)}>←</button>
+      <button className="up" type="button" onPointerDown={handleNudge(0,-step)}>↑</button>
+      <button className="left" type="button" onPointerDown={handleNudge(-step,0)}>←</button>
       <button className="center" type="button" onPointerDown={dragNudgeStart} onPointerMove={dragNudgeMove} onPointerUp={dragNudgeEnd} onPointerCancel={dragNudgeEnd} aria-label="Перетащить блок стрелок"><span>•</span></button>
-      <button className="right" type="button" onClick={()=>nudgeSelected(step,0)}>→</button>
-      <button className="down" type="button" onClick={()=>nudgeSelected(0,step)}>↓</button>
+      <button className="right" type="button" onPointerDown={handleNudge(step,0)}>→</button>
+      <button className="down" type="button" onPointerDown={handleNudge(0,step)}>↓</button>
     </div> : null}
   </>;
 }
