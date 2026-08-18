@@ -51,7 +51,7 @@ const GROUP_SCREENS = {
 };
 
 const DEFAULT_SCREEN = {
-  home: 'plan',
+  home: 'visualization',
   construction: 'sip',
   materials: 'price',
   estimate: 'estimate'
@@ -136,8 +136,7 @@ function ActionSheet({ open, onClose, actions, theme, canUndo, canRedo }) {
   return (
     <div className="mobile-sheet-backdrop" onMouseDown={onClose}>
       <section className="mobile-action-sheet" onMouseDown={(event) => event.stopPropagation()} aria-modal="true" role="dialog">
-        <div className="sheet-handle" />
-        <header><div><strong>Проект</strong><span>Действия и настройки</span></div><button onClick={onClose} aria-label="Закрыть"><X /></button></header>
+        <header><div><strong>Меню</strong><span>Проект и настройки</span></div><button onClick={onClose} aria-label="Закрыть"><X /></button></header>
         <div className="sheet-action-grid">
           <button onClick={actions.undo} disabled={!canUndo}><ChevronLeft /><span>Отменить</span></button>
           <button onClick={actions.redo} disabled={!canRedo}><ChevronRight /><span>Повторить</span></button>
@@ -231,7 +230,7 @@ function BackupModal({ open, backups, onClose, onRestore }) {
 export function App() {
   const { project, replace, undo, redo, canUndo, canRedo, checkpoint, saveState } = useProject();
   const [section, setSection] = useState('home');
-  const [active, setActive] = useState('plan');
+  const [active, setActive] = useState('visualization');
   const [lastScreens, setLastScreens] = useState(DEFAULT_SCREEN);
   const [theme, setTheme] = useState(() => localStorage.getItem('eft-react-theme') || 'light');
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -244,6 +243,13 @@ export function App() {
   const navigateSection = (nextSection) => {
     setSection(nextSection);
     if (nextSection === 'cutting') return;
+    if (nextSection === 'home') {
+      sessionStorage.setItem('eft-visual-mode', 'plan');
+      window.dispatchEvent(new CustomEvent('eft-visual-mode', { detail: 'plan' }));
+      setActive('visualization');
+      setLastScreens((prev) => ({ ...prev, home: 'visualization' }));
+      return;
+    }
     const next = lastScreens[nextSection] || DEFAULT_SCREEN[nextSection];
     if (next) setActive(next);
   };
@@ -267,7 +273,9 @@ export function App() {
       replace(migrateProject(JSON.parse(await file.text())));
       setNotice(`Открыт: ${file.name}`);
       setSection('home');
-      setActive('plan');
+      sessionStorage.setItem('eft-visual-mode', 'plan');
+      window.dispatchEvent(new CustomEvent('eft-visual-mode', { detail: 'plan' }));
+      setActive('visualization');
     } catch (error) {
       setNotice(`Ошибка открытия: ${error.message}`);
     } finally {
@@ -281,7 +289,9 @@ export function App() {
     checkpoint();
     replace(createProjectWithCurrentPrices(project));
     setSection('home');
-    setActive('plan');
+    sessionStorage.setItem('eft-visual-mode', 'plan');
+    window.dispatchEvent(new CustomEvent('eft-visual-mode', { detail: 'plan' }));
+    setActive('visualization');
     setNotice('Создан новый проект');
   };
 
@@ -304,8 +314,8 @@ export function App() {
     <div className={`app mobile-app-shell ${section === 'home' && active === 'plan' ? 'plan-editor-active' : ''}`} data-theme={theme}>
       <header className="mobile-topbar">
         <div className="mobile-topbar-main">
-          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M7.7.4 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
-          <button className="mobile-more-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /></button>
+          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M7.9.0 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
+          <button className="mobile-more-button mobile-menu-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /><span>Меню</span></button>
         </div>
         <div className="mobile-total-strip">
           <span><small>Материалы</small><strong>{formatMoney(calculation.totals.materials)}</strong></span>
@@ -350,7 +360,7 @@ export function App() {
         actions={{
           undo: () => { undo(); setSheetOpen(false); },
           redo: () => { redo(); setSheetOpen(false); },
-          theme: changeTheme,
+          theme: () => { changeTheme(); setSheetOpen(false); },
           settings: () => { setActive('calculation-settings'); setSection('home'); setSheetOpen(false); },
           templates: () => { setSheetOpen(false); setTemplatesOpen(true); },
           newProject,
@@ -368,7 +378,9 @@ export function App() {
           replace(applyProjectTemplate(project, template));
           setTemplatesOpen(false);
           setSection('home');
-          setActive('plan');
+          sessionStorage.setItem('eft-visual-mode', 'plan');
+          window.dispatchEvent(new CustomEvent('eft-visual-mode', { detail: 'plan' }));
+          setActive('visualization');
           setNotice(`Загружен шаблон: ${template.name}`);
         }}
       />

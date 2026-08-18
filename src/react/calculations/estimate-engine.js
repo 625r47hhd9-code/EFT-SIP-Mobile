@@ -59,7 +59,7 @@ function resolveRafterStructure(project, geometry, frameLength) {
   const step = automatic ? 0.6 : Math.min(1.2, Math.max(0.3, Number(roof.rafterStep) || 0.6));
   const section = automatic
     ? ((geometry.wallSlopeLength || geometry.slopeLength) <= 7 ? '50x150' : '50x200')
-    : (roof.rafterSection === '50x200' ? '50x200' : '50x150');
+    : (['50x100','50x150','50x200'].includes(roof.rafterSection) ? roof.rafterSection : '50x150');
   const boardWidth = 0.05;
   const module = step + boardWidth;
   const pairCount = frameLength > 0 ? Math.ceil(frameLength / module) + 1 : 0;
@@ -231,7 +231,8 @@ function roofSection(project, metrics, index, inputs) {
   const houseLength = Math.max(0, Number(project.plan.house.w) || 0);
   const rafterStructure = resolveRafterStructure(project, geometry, houseLength);
   const rafterSection = rafterStructure.section;
-  const rafterDepth = rafterSection === '50x200' ? 0.2 : 0.15;
+  const rafterDepth = rafterSection === '50x200' ? 0.2 : rafterSection === '50x100' ? 0.1 : 0.15;
+  const rafterCatalogQuery = rafterSection === '50x200' ? 'Доска ест. влажн. сосна 50х200мм' : rafterSection === '50x100' ? 'Доска ест.влажн. сосна 50*100мм' : 'Доска ест. влажн. сосна 50х150мм';
   const terracePostCount = terraceRoofs.reduce((sum, item) => sum + item.result.postCount, 0);
   const mauerlatLength = mainRoofShape === 'flat' ? 0 : houseLength * 2;
   const mauerlatPurchaseLength = mauerlatLength * inputs.formulas.mauerlatReserve;
@@ -264,9 +265,12 @@ function roofSection(project, metrics, index, inputs) {
   const mainGableBoardCount = mainGableBoardRequiredLength ? Math.ceil(mainGableBoardRequiredLength / 6) : 0;
   const mainGableBoardVolume = mainGableBoardCount * 6 * 0.05 * 0.15;
   const lathStep = Math.min(1.2, Math.max(0.1, Number(roof.lathStep) || 0.35));
+  const lathSection = roof.lathSection === '25x150' ? '25x150' : '25x100';
+  const lathWidth = lathSection === '25x150' ? 0.15 : 0.1;
+  const lathCatalogQuery = lathSection === '25x150' ? 'Доска ест.влажн. сосна 25*150мм' : 'Доска ест.влажн. сосна 25*100мм';
   const mainLathRequiredLength = mainArea ? mainArea / lathStep + mainEaveLength : 0;
   const mainLathBoardCount = mainLathRequiredLength ? Math.ceil(mainLathRequiredLength / 6) : 0;
-  const mainLathVolume = mainLathBoardCount * 6 * 0.025 * 0.1;
+  const mainLathVolume = mainLathBoardCount * 6 * 0.025 * lathWidth;
   const extensionLines = compact(terraceRoofs.flatMap(({ platform, result }) => {
     if (platform.roof?.mode === 'none' || !result.netArea) return [];
     const key = `platform-${String(platform.id).replace(/[^a-zа-я0-9-]/gi, '-')}`;
@@ -289,16 +293,16 @@ function roofSection(project, metrics, index, inputs) {
     const gableBoardVolume = gableBoardCount * 6 * 0.05 * 0.15;
     const lathRequiredLength = result.netArea ? result.netArea / lathStep + result.eaveLength : 0;
     const lathBoardCount = lathRequiredLength ? Math.ceil(lathRequiredLength / 6) : 0;
-    const lathVolume = lathBoardCount * 6 * 0.025 * 0.1;
+    const lathVolume = lathBoardCount * 6 * 0.025 * lathWidth;
     const eaveTrimPurchaseLength = result.eaveLength * inputs.formulas.roofTrimReserve;
     const vergeTrimPurchaseLength = result.vergeLength * inputs.formulas.roofTrimReserve;
     return [
       makeLine(index, 'roof', 'Монтаж стропильной системы', coldSlope, { key: `${key}-rafters-work`, kind: 'labor', name: `Монтаж стропильной системы ${title}`, source }),
-      makeLine(index, 'roof', rafterSection === '50x200' ? 'Доска ест. влажн. сосна 50х200мм' : 'Доска ест. влажн. сосна 50х150мм', terraceRafterVolume, { key: `${key}-rafters`, unit: 'м³', digits: 3, name: `Стропильная доска ${rafterSection.replace('x', '×')} мм · ${terraceRafterBoardCount} шт × 6 м, включая коньковый прогон · кровля ${title}`, source }),
+      makeLine(index, 'roof', rafterCatalogQuery, terraceRafterVolume, { key: `${key}-rafters`, unit: 'м³', digits: 3, name: `Стропильная доска ${rafterSection.replace('x', '×')} мм · ${terraceRafterBoardCount} шт × 6 м, включая коньковый прогон · кровля ${title}`, source }),
       makeLine(index, 'roof', 'Доска ест. влажн. сосна 50х150мм', gableBoardVolume, { key: `${key}-gable-frame`, unit: 'м³', digits: 3, name: `Каркас фронтона ${title} · доска 50×150 мм · ${gableBoardCount} шт × 6 м`, source }),
       makeLine(index, 'roof', 'Монтаж каркаса фронтонов', coldGable, { key: `${key}-gable-frame-work`, kind: 'labor', name: `Монтаж каркаса фронтона ${title}`, source }),
       makeLine(index, 'roof', 'Монтаж обрешётки и контробрешётки', result.netArea, { key: `${key}-lath-work`, kind: 'labor', name: `Монтаж обрешётки кровли ${title}`, source }),
-      makeLine(index, 'roof', 'Доска ест.влажн. сосна 25*100мм', lathVolume, { key: `${key}-lath`, unit: 'м³', digits: 3, name: `Обрешётка кровли ${title} · шаг ${Math.round(lathStep * 1000)} мм · доска 25×100 мм · ${lathBoardCount} шт × 6 м`, source }),
+      makeLine(index, 'roof', lathCatalogQuery, lathVolume, { key: `${key}-lath`, unit: 'м³', digits: 3, name: `Обрешётка кровли ${title} · шаг ${Math.round(lathStep * 1000)} мм · доска ${lathSection.replace('x','×')} мм · ${lathBoardCount} шт × 6 м`, source }),
       makeLine(index, 'roof', 'Гидро-ветрозащитная мембрана', Math.ceil(constructionArea / 70), { key: `${key}-membrane`, unit: 'рулон', name: `Гидро-ветрозащитная мембрана · кровля ${title}`, source }),
       makeLine(index, 'roof', 'Профлист С-21 окрашенный', result.purchaseArea + result.gablePurchaseArea, { key: `${key}-cover`, unit: 'м²', name: `Профлист С-21 · кровля ${title}`, source }),
       makeLine(index, 'roof', 'Монтаж кровельного покрытия — профлист С-21', constructionArea, { key: `${key}-cover-work`, kind: 'labor', name: `Монтаж профлиста · кровля ${title}`, unit: 'м²', source }),
@@ -338,10 +342,10 @@ function roofSection(project, metrics, index, inputs) {
     makeLine(index, 'roof', 'Анкер-шпилька для крепления мауэрлата', mauerlatAnchors, { key: 'mauerlat-anchors', unit: 'шт' }),
     makeLine(index, 'roof', 'Монтаж стропильной системы', mainColdSlopeArea, { key: 'rafters-work', kind: 'labor', name: rafterStructure.system === 'truss' ? 'Монтаж стропильных ферм' : 'Монтаж стропильной системы' }),
     makeLine(index, 'roof', 'Монтаж обрешётки и контробрешётки', mainArea, { key: 'lath-work', kind: 'labor' }),
-    makeLine(index, 'roof', rafterSection === '50x200' ? 'Доска ест. влажн. сосна 50х200мм' : 'Доска ест. влажн. сосна 50х150мм', mainRafterVolume, { key: 'rafters', unit: 'м³', digits: 3, name: `Стропильная доска ${rafterSection.replace('x', '×')} мм · ${mainRafterBoardCount} шт × 6 м, включая коньковый прогон` }),
+    makeLine(index, 'roof', rafterCatalogQuery, mainRafterVolume, { key: 'rafters', unit: 'м³', digits: 3, name: `Стропильная доска ${rafterSection.replace('x', '×')} мм · ${mainRafterBoardCount} шт × 6 м, включая коньковый прогон` }),
     makeLine(index, 'roof', 'Доска ест. влажн. сосна 50х150мм', mainGableBoardVolume, { key: 'gable-frame', unit: 'м³', digits: 3, name: `Каркас холодных фронтонов · доска 50×150 мм · ${mainGableBoardCount} шт × 6 м`, source: 'gables' }),
     makeLine(index, 'roof', 'Монтаж каркаса фронтонов', mainColdGableArea, { key: 'gable-frame-work', kind: 'labor', source: 'gables' }),
-    makeLine(index, 'roof', 'Доска ест.влажн. сосна 25*100мм', mainLathVolume, { key: 'lath', unit: 'м³', digits: 3, name: `Обрешётка 25×100 мм · шаг ${Math.round(lathStep * 1000)} мм · ${mainLathBoardCount} шт × 6 м` }),
+    makeLine(index, 'roof', lathCatalogQuery, mainLathVolume, { key: 'lath', unit: 'м³', digits: 3, name: `Обрешётка ${lathSection.replace('x','×')} мм · шаг ${Math.round(lathStep * 1000)} мм · ${mainLathBoardCount} шт × 6 м` }),
     makeLine(index, 'roof', 'Гидро-ветрозащитная мембрана', Math.ceil(mainConstructionArea / 70), { key: 'membrane', unit: 'рулон' }),
     makeLine(index, 'roof', 'Профлист С-21 окрашенный', mainCoverPurchaseArea + mainGablePurchaseArea, { key: 'cover', unit: 'м²' }),
     makeLine(index, 'roof', 'Монтаж кровельного покрытия — профлист С-21', mainConstructionArea, { key: 'cover-work', kind: 'labor', name: 'Монтаж профлиста основной кровли', unit: 'м²' }),
@@ -394,7 +398,7 @@ function roofSection(project, metrics, index, inputs) {
     mainEaveLength: round(mainEaveLength, 3), mainVergeLength: round(mainVergeLength, 3),
     eaveOverhang: round(eaveOverhang, 3), gableOverhang: round(gableOverhang, 3),
     mainEaveTrimPurchaseLength: round(mainEaveTrimPurchaseLength, 3), mainVergeTrimPurchaseLength: round(mainVergeTrimPurchaseLength, 3),
-    lathStep, mainLathRequiredLength: round(mainLathRequiredLength, 3), mainLathBoardCount,
+    lathStep, lathSection, mainLathRequiredLength: round(mainLathRequiredLength, 3), mainLathBoardCount,
     gutterLength: round(gutterLength, 3), gutterPieces, gutterConnectors, gutterEndCaps, gutterBrackets, gutterOutlets,
     downpipeLength: round(downpipeLength, 3), gutterElbows, downpipeClamps
   };

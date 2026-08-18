@@ -189,6 +189,7 @@ function RoofConstructionPanels({
             disabled={(project.settings.roof.structureMode || "auto") === "auto"}
             onChange={(value) => setSetting("roof", "rafterSection", value)}
             options={[
+              { value: "50x100", label: "50×100 мм" },
               { value: "50x150", label: "50×150 мм" },
               { value: "50x200", label: "50×200 мм" },
             ]}
@@ -198,6 +199,12 @@ function RoofConstructionPanels({
             value={project.settings.roof.lathStep ?? 0.35}
             suffix="м" min={0.1} max={1.2} step={0.05}
             onChange={(value) => setSetting("roof", "lathStep", value)}
+          />
+          <SelectField
+            label="Доска обрешётки"
+            value={project.settings.roof.lathSection || "25x100"}
+            onChange={(value) => setSetting("roof", "lathSection", value)}
+            options={[{ value: "25x100", label: "25×100 мм" }, { value: "25x150", label: "25×150 мм" }]}
           />
           {project.settings.roof.shape !== "flat" ? <>
             <SelectField

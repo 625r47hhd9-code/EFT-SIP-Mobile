@@ -136,7 +136,7 @@ export function createDefaultProject() {
       roof: {
         shape: 'gable', type: 'cold', ridgeHeight: 1.8, ridgeLength: 9.66, wastePercent: 10, warmPercent: 0,
         eaveOverhang: 0.5, gableOverhang: 0.3,
-        structureMode: 'auto', rafterSystem: 'hanging', rafterStep: 0.6, rafterSection: '50x150', lathStep: 0.35,
+        structureMode: 'auto', rafterSystem: 'hanging', rafterStep: 0.6, rafterSection: '50x150', lathStep: 0.35, lathSection: '25x100',
         includeEaveTrim: true, includeVergeTrim: true, includeRidgeSeal: true,
         includeGutter: false,
         gableType: 'auto', gableCount: 2

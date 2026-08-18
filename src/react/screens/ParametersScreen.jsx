@@ -152,7 +152,7 @@ export default function ParametersScreen() {
   return (
     <div className="screen parameters-screen-v3">
       <div className="all-params-intro">
-        <span className="eyebrow">Полная проверка проекта · M7.8.0</span>
+        <span className="eyebrow">Полная проверка проекта · M7.9.0</span>
         <h1>Все параметры дома</h1>
         <p>Один последовательный экран. Прокручивайте сверху вниз и проверяйте проект по разделам: от габаритов и фундамента до инженерии, отделки, доставки и расчётных связей.</p>
       </div>
@@ -226,11 +226,12 @@ export default function ParametersScreen() {
             <SelectField label="Режим расчёта" value={roof.structureMode || 'auto'} onChange={(value) => updateSetting('roof', 'structureMode', value)} options={[{value:'auto',label:'Автоматически'},{value:'manual',label:'Ручной выбор'}]} />
             <SelectField label="Стропильная система" value={roof.rafterSystem || 'hanging'} onChange={(value) => updateSetting('roof', 'rafterSystem', value)} options={[
               {value:'hanging',label:'Висячая'},
-              {value:'naslonnaya',label:'Наслонная'},
+              {value:'layered',label:'Наслонная'},
               {value:'truss',label:'Фермы'}
             ]} />
             <NumberField label="Шаг стропил / ферм" value={roof.rafterStep} suffix="м" min={0.3} max={1.5} step={0.05} onChange={(value) => updateSetting('roof', 'rafterStep', value)} />
             <SelectField label="Сечение стропил" value={roof.rafterSection || '50x150'} onChange={(value) => updateSetting('roof', 'rafterSection', value)} options={[
+              {value:'50x100',label:'50×100 мм'},
               {value:'50x150',label:'50×150 мм'},
               {value:'50x200',label:'50×200 мм'},
               {value:'100x150',label:'100×150 мм'}
@@ -246,6 +247,7 @@ export default function ParametersScreen() {
             <NumberField label="Карнизный свес" value={roof.eaveOverhang} suffix="м" min={0} max={2} step={0.05} onChange={(value) => updateSetting('roof', 'eaveOverhang', value)} />
             <NumberField label="Торцевой свес" value={roof.gableOverhang} suffix="м" min={0} max={2} step={0.05} onChange={(value) => updateSetting('roof', 'gableOverhang', value)} />
             <NumberField label="Шаг обрешётки" value={roof.lathStep} suffix="м" min={0.1} max={1} step={0.05} onChange={(value) => updateSetting('roof', 'lathStep', value)} />
+            <SelectField label="Доска обрешётки" value={roof.lathSection || '25x100'} onChange={(value) => updateSetting('roof', 'lathSection', value)} options={[{value:'25x100',label:'25×100 мм'},{value:'25x150',label:'25×150 мм'}]} />
             <NumberField label="Запас покрытия" value={roof.wastePercent} suffix="%" min={0} max={50} step={1} onChange={(value) => updateSetting('roof', 'wastePercent', value)} />
             {roof.type === 'combo' ? <NumberField label="Тёплая часть" value={roof.warmPercent} suffix="%" min={0} max={100} step={5} onChange={(value) => updateSetting('roof', 'warmPercent', value)} /> : null}
             <SelectField label="Тип фронтонов" value={roof.gableType || 'auto'} onChange={(value) => updateSetting('roof', 'gableType', value)} options={[

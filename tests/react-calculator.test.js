@@ -660,3 +660,27 @@ test('automatic roof prefers trusses for a long clear span without an internal b
   const result = calculateProject(project);
   assert.equal(result.roof.rafterStructure.system, 'truss');
 });
+
+test('manual 50x100 rafters resolve to the matching priced catalog board', () => {
+  const project = createDefaultProject();
+  project.settings.roof.structureMode = 'manual';
+  project.settings.roof.rafterSystem = 'hanging';
+  project.settings.roof.rafterSection = '50x100';
+  const result = calculateProject(project);
+  assert.equal(result.roof.rafterStructure.section, '50x100');
+  const line = result.lines.find((item) => item.id === 'roof:rafters');
+  assert.ok(line.catalogId);
+  assert.match(line.name, /50×100/);
+  assert.ok(line.price > 0);
+});
+
+test('25x150 lath selection changes roof material and keeps the line priced', () => {
+  const project = createDefaultProject();
+  project.settings.roof.lathSection = '25x150';
+  const result = calculateProject(project);
+  assert.equal(result.roof.lathSection, '25x150');
+  const line = result.lines.find((item) => item.id === 'roof:lath');
+  assert.ok(line.catalogId);
+  assert.match(line.name, /25×150/);
+  assert.ok(line.price > 0);
+});
