@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   allOpeningSegments, boundsOf, collectSnapAxes, dimensionOutsideHouse, movePoints, nearestSegment,
-  pileRowAlignment, planIssues, projectOpeningToWall, rectanglePoints, shouldClosePolygon, snapPoint, snapPointDetails, unifiedWallSegments, scalePlanToHouse
+  pileRowAlignment, planIssues, projectOpeningToWall, rectanglePoints, shouldClosePolygon, snapPoint, snapPointDetails, unifiedWallSegments, scalePlanToHouse, snapPlatformToHouse
 } from '../src/react/planner/geometry.js';
 
 const room = (id, name, x1, y1, x2, y2) => ({
@@ -151,4 +151,23 @@ test('scalePlanToHouse proportionally pulls rooms, piles, platforms and openings
   assert.equal(plan.openings[0].x,20); assert.equal(plan.openings[0].y,3);
   assert.equal(plan.openings[0].width,.9, 'opening physical width stays unchanged');
   assert.equal(plan.platforms[0].w,20); assert.equal(plan.platforms[0].h,3);
+});
+
+
+test('every pile inside an existing pile row becomes a magnetic snap node', () => {
+  const plan = {
+    house:{w:10,h:8}, wallThickness:.174, rooms:[], walls:[], dimensions:[], bindingLines:[], platforms:[], piles:[],
+    pileRows:[{id:'r',x1:0,y1:2,x2:8,y2:2,count:5}]
+  };
+  const axes = collectSnapAxes(plan);
+  const resolved = snapPointDetails({x:4.18,y:2.12}, axes, {grid:false,tolerance:.1,pointTolerance:.3});
+  assert.equal(resolved.snap.kind, 'node');
+  assert.deepEqual(resolved.point, {x:4,y:2});
+});
+
+test('terrace and porch snap their nearest edge to the house perimeter', () => {
+  const house = {w:10,h:8};
+  assert.equal(snapPlatformToHouse({x:1,y:7.82,w:4,h:2}, house, .3).y, 8);
+  assert.equal(snapPlatformToHouse({x:9.85,y:2,w:2,h:3}, house, .3).x, 10);
+  assert.equal(snapPlatformToHouse({x:-2.1,y:1,w:2,h:3}, house, .3).x, -2);
 });

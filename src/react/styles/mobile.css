@@ -704,3 +704,52 @@ button, input, select, textarea { font: inherit; }
   .auto-pile-preview{margin:10px 0;padding:12px;border-radius:14px;background:#f2f8ee;display:grid;gap:3px;text-align:center}
   .auto-pile-preview strong{font-size:22px;color:#4c852b}.auto-pile-preview span{font-size:9px;color:#778072}
 }
+
+
+/* M7.6.1: visible auto-piles, collapsible rail, fixed select/delete, scalable platforms */
+@media(max-width:720px){
+  .mobile-plan-fullscreen .platform-label,
+  .mobile-plan-fullscreen .platform-area{
+    font-size:var(--plan-font-size,14px)!important;
+    paint-order:stroke;stroke:#fff;stroke-width:3.5px;stroke-linejoin:round;
+    font-weight:850!important;
+  }
+  .mobile-plan-fullscreen .platform-label{fill:#315b63!important}
+  .mobile-plan-fullscreen .platform-area{fill:#446b72!important}
+
+  .mobile-plan-tools{
+    transition:width .18s ease,left .18s ease,padding .18s ease,transform .18s ease!important;
+    touch-action:pan-y!important;
+  }
+  .mobile-plan-tools .mobile-select-fixed{flex:0 0 auto}
+  .mobile-plan-tools .mobile-delete-fixed{
+    flex:0 0 auto;padding-top:5px;margin-top:4px;border-top:1px solid rgba(70,65,95,.10)
+  }
+  .mobile-plan-tools .mobile-delete-fixed button{color:#c83d48!important}
+  .mobile-plan-tools .mobile-delete-fixed button.active{background:#d94a55!important;color:#fff!important}
+  .mobile-plan-tools .auto-piles-tool{color:#477c25!important;background:rgba(143,198,63,.10)!important}
+  .mobile-plan-tools .auto-piles-tool svg{stroke:#5d952e!important}
+  .mobile-tools-peek{display:none!important}
+
+  .mobile-plan-tools.collapsed{
+    left:0!important;width:14px!important;min-width:14px!important;max-width:14px!important;
+    padding:0!important;border-radius:0 10px 10px 0!important;overflow:visible!important;
+    background:rgba(255,255,255,.94)!important;
+  }
+  .mobile-plan-tools.collapsed .mobile-select-fixed,
+  .mobile-plan-tools.collapsed .mobile-tools-scroll,
+  .mobile-plan-tools.collapsed .mobile-delete-fixed{display:none!important}
+  .mobile-plan-tools.collapsed .mobile-tools-peek{
+    display:grid!important;position:absolute;inset:0;width:18px!important;min-width:18px!important;max-width:18px!important;
+    height:100%!important;min-height:80px!important;padding:0!important;margin:0!important;border:0!important;
+    border-radius:0 10px 10px 0!important;background:rgba(255,255,255,.96)!important;color:#686675!important;
+    place-items:center;font-size:18px!important;box-shadow:5px 0 14px rgba(30,27,44,.08)!important;
+  }
+  .mobile-plan-tools.collapsed .mobile-tools-peek span{writing-mode:vertical-rl;line-height:1}
+
+  .mobile-auto-pile-setup{
+    z-index:230!important;
+    left:18px!important;right:18px!important;
+    box-shadow:0 -8px 42px rgba(25,22,45,.22)!important;
+  }
+}

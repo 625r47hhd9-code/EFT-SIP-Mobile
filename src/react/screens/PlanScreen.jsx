@@ -15,11 +15,11 @@ import { applyPlanTransfer, downloadPlanTransfer, sharePlanTransfer } from '../s
 import {
   allOpeningSegments, boundsOf, collectSnapAxes, dimensionOutsideHouse, lineEndpoints, movePoints, nearestSegment,
   pileRowAlignment, planIssues, projectOpeningToWall, rectanglePoints, roomPoints, roundCoord, shouldClosePolygon,
-  snapPoint, snapPointDetails, unifiedWallSegments, withRoomBounds, scalePlanToHouse
+  snapPoint, snapPointDetails, unifiedWallSegments, withRoomBounds, scalePlanToHouse, snapPlatformToHouse
 } from '../planner/geometry.js';
 
 const VIEW = { width: 1100, height: 760 };
-const MOBILE_RELEASE_LABEL = 'M7.6.0';
+const MOBILE_RELEASE_LABEL = 'M7.6.1';
 const SKETCHES_KEY = 'eft-react-plan-sketches-v47';
 const DRAW_TOOLS = new Set(['room', 'wall', 'dimension', 'pileRow', 'bindingLine', 'terrace', 'porch']);
 const TOOLS = [
@@ -77,6 +77,7 @@ function previewPlan(source, gesture) {
   } else if (gesture.type === 'platform') {
     const item = itemFor('platforms'); const origin = snapPoint({ x: item.x + dx, y: item.y + dy }, axes);
     item.x = origin.x; item.y = origin.y;
+    Object.assign(item, snapPlatformToHouse(item, plan.house));
   } else if (gesture.type === 'opening') {
     const item = itemFor('openings');
     if (item) Object.assign(item, projectOpeningToWall(item, end, plan, { lockDoorType: item.doorType === 'garage' }));
@@ -290,8 +291,9 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       room: { tolerance: .34, pointTolerance: .38, grid: .1 },
       polygon: { tolerance: .42, pointTolerance: .58, grid: .1 },
       wall: { tolerance: .26, pointTolerance: .32, grid: .1 },
-      pileRow: { tolerance: .05, pointTolerance: .08, grid: false },
-      bindingLine: { tolerance: .06, pointTolerance: .10, grid: false },
+      pile: { tolerance: .18, pointTolerance: .34, grid: .1 },
+      pileRow: { tolerance: .12, pointTolerance: .28, grid: false },
+      bindingLine: { tolerance: .08, pointTolerance: .16, grid: false },
       terrace: { tolerance: .22, pointTolerance: .26, grid: .1 },
       porch: { tolerance: .22, pointTolerance: .26, grid: .1 },
       dimension: { tolerance: .18, pointTolerance: .24, grid: .1 }
@@ -305,7 +307,10 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     event.preventDefault(); event.stopPropagation(); window.getSelection?.()?.removeAllRanges();
     svgRef.current.setPointerCapture?.(event.pointerId);
     const resolved = magneticPoint(event, value.type);
-    const start = ['pileRow','bindingLine','wall','dimension'].includes(value.type) ? resolved.raw : resolved.point;
+    const freeLine = ['pileRow','bindingLine','wall','dimension'].includes(value.type);
+    const start = value.type === 'pileRow'
+      ? (resolved.snap ? resolved.point : resolved.raw)
+      : freeLine ? resolved.raw : resolved.point;
     setGesture({ ...value, pointerId: event.pointerId, start, end: start, snap: resolved.snap || null });
   };
   const deleteObject = (type, id) => commitPlan((next) => {
@@ -371,7 +376,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       setPolygonDraft((current) => [...current, polygonPoint]); return;
     }
     if (tool === 'window' || tool === 'door' || tool === 'garage' || tool === 'gap') { addAt(rawPoint, tool); return; }
-    if (tool === 'pile') { addAt(point, tool); return; }
+    if (tool === 'pile') { const resolvedPile = magneticPoint(event, 'pile'); addAt(resolvedPile.point, tool); return; }
     if (tool === 'dimension') {
       if (!dimensionStart) { setDimensionStart(point); setDimensionHover(point); return; }
       const distance = Math.hypot(point.x - dimensionStart.x, point.y - dimensionStart.y);
@@ -429,7 +434,10 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
           const id = uid(current.type);
           commitPlan((next) => {
             if (current.type === 'room') next.rooms.push(withRoomBounds({ id, name: `Комната ${next.rooms.length + 1}`, points, include: true, bearing: false, ceilingMode: 'flat' }));
-            else next.platforms.push(normalizeTerracePlatform({ id, kind: current.type, ...bounds, include: true, steps: 3, stairSide: 'bottom', stairDirection: 'outward', stairWidth: 1.2, tread: 0.3, riser: 0.18 }));
+            else {
+              const platform = normalizeTerracePlatform({ id, kind: current.type, ...bounds, include: true, steps: 3, stairSide: 'bottom', stairDirection: 'outward', stairWidth: 1.2, tread: 0.3, riser: 0.18 });
+              next.platforms.push(snapPlatformToHouse(platform, next.house));
+            }
           });
           selectCreated({ type: current.type === 'room' ? 'room' : 'platform', id });
         }
@@ -463,6 +471,8 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
   const roomMetaSize = Math.max(15, Math.min(70, 13.2 * zoomTextScale));
   const technicalTextSize = Math.max(12.5, Math.min(52, 11.5 * zoomTextScale));
   const dimensionTextSize = Math.max(14.5, Math.min(64, 12.5 * zoomTextScale));
+  const platformLabelSize = Math.max(15, Math.min(66, 13.5 * zoomTextScale));
+  const platformAreaSize = Math.max(13, Math.min(56, 11.5 * zoomTextScale));
     const selectedRoom = selected?.type === 'room' ? (shownPlan.rooms || []).find((room) => room.id === selected.id) : null;
   const selectedRoomScreen = selectedRoom ? roomPoints(selectedRoom).map((point) => p(point.x, point.y)) : [];
   const drawSegment = (segment, key) => {
@@ -484,7 +494,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
       <marker id="planner-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="currentColor" /></marker>
     </defs>
     <rect className="plan-grid-hit" x={-VIEW.width*8} y={-VIEW.height*8} width={VIEW.width*17} height={VIEW.height*17} fill="url(#planner-grid)" />
-    {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - 5}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + 13}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
+    {(shownPlan.platforms || []).map((platform) => { const q = p(platform.x, platform.y); return <g key={platform.id} className="planner-object" onPointerDown={(event) => objectDown(event, 'platform', platform.id)}><rect className={`platform-shape ${selected?.id === platform.id ? 'selected' : ''}`} x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /><text className="platform-label" style={{'--plan-font-size': `${platformLabelSize}px`}} x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 - platformAreaSize*.35}>{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text><text className="platform-area" style={{'--plan-font-size': `${platformAreaSize}px`}} x={q.x + platform.w * layout.scale / 2} y={q.y + platform.h * layout.scale / 2 + platformAreaSize*.9}>{formatNumber(platform.w * platform.h)} м²</text><TerraceStairs platform={platform} p={p} />{shownPlan.showBinding !== false && platform.binding?.mode !== 'none' ? <rect className="binding-guide" x={q.x} y={q.y} width={platform.w * layout.scale} height={platform.h * layout.scale} /> : null}</g>; })}
     <rect className="house-fill" x={topLeft.x} y={topLeft.y} width={shownPlan.house.w * layout.scale} height={shownPlan.house.h * layout.scale} />
     {(shownPlan.rooms || []).map((room, roomIndex) => { const points = roomPoints(room); const screen = points.map((point) => p(point.x, point.y)); const bounds = boundsOf(points); const center = p(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2); const selectedNow = selected?.type === 'room' && selected.id === room.id; return <g key={room.id} className="planner-object room-object"><polygon className={`room-fill room-tone-${roomIndex % 6} ${selectedNow ? 'selected' : ''} ${issueRooms.has(room.id) ? 'invalid' : ''} ${room.ceilingMode === 'open-rafter' ? 'open-rafter' : ''}`} points={screen.map((point) => `${point.x},${point.y}`).join(' ')} /><polygon className="room-touch-hit" points={screen.map((point) => `${point.x},${point.y}`).join(' ')} onPointerDown={(event) => objectDown(event, 'room', room.id)} /><text className="room-name" style={{'--plan-font-size': `${roomNameSize}px`}} x={center.x} y={center.y - roomMetaSize*.95}>{room.name}</text><text className="room-dimensions" style={{'--plan-font-size': `${roomMetaSize}px`}} x={center.x} y={center.y + roomMetaSize*.55}>{formatNumber(bounds.w)} × {formatNumber(bounds.h)} м</text><text className="room-area" style={{'--plan-font-size': `${roomMetaSize}px`}} x={center.x} y={center.y + roomMetaSize*1.85}>{formatNumber(polygonArea(points))} м²</text>{room.ceilingMode === 'open-rafter' ? <text className="room-ceiling-mode" style={{'--plan-font-size': `${Math.max(12,roomMetaSize)}px`}} x={center.x} y={center.y + roomMetaSize*3.0}>Второй свет</text> : null}{selectedNow ? screen.map((point, index) => <circle key={index} className="vertex-handle" cx={point.x} cy={point.y} r="7" onPointerDown={(event) => objectDown(event, 'room', room.id, { kind: 'vertex', index })} />) : null}</g>; })}
     {(() => {
@@ -596,7 +606,8 @@ const MOBILE_TOOLS = [
   ['room', 'Комната', SquareDashed], ['polygon', 'Свободная', Pentagon], ['wall', 'Перегородка', BrickWall],
   ['gap', 'Разрыв', Scissors], ['window', 'Окно', PanelsTopLeft], ['door', 'Дверь', DoorOpen],
   ['dimension', 'Размер', Ruler], ['pile', 'Свая', PileIcon], ['pileRow', 'Ряд свай', PileRowIcon],
-  ['bindingLine', 'Обвязка', Layers3], ['terrace', 'Терраса', Fence], ['porch', 'Крыльцо', HousePlus], ['delete', 'Удалить', Trash2]
+  ['autoPiles', 'Автосваи', Sparkles], ['bindingLine', 'Обвязка', Layers3],
+  ['terrace', 'Терраса', Fence], ['porch', 'Крыльцо', HousePlus]
 ];
 
 const roundDisplay = (value) => Math.round((Number(value) || 0) * 100) / 100;
@@ -666,7 +677,7 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metr
     if (!selected) return;
     if (selected.type === 'room') { const item = (next.rooms || []).find((candidate) => candidate.id === selected.id); if (item) moveRoomExact(next, item, dx, dy); return; }
     if (selected.type === 'opening') { const item = (next.openings || []).find((candidate) => candidate.id === selected.id); if (!item) return; const target = { x: roundCoord(item.x + dx), y: roundCoord(item.y + dy) }; Object.assign(item, projectOpeningToWall(item, target, next, { lockDoorType: item.doorType === 'garage' })); return; }
-    if (selected.type === 'platform') { const item = (next.platforms || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); Object.assign(item, normalizeTerracePlatform(item)); } return; }
+    if (selected.type === 'platform') { const item = (next.platforms || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); Object.assign(item, normalizeTerracePlatform(item)); Object.assign(item, snapPlatformToHouse(item, next.house)); } return; }
     if (selected.type === 'pile' || selected.type === 'gap') { const key = selected.type === 'pile' ? 'piles' : 'wallGaps'; const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); } return; }
     const key = selected.type === 'wall' ? 'walls' : selected.type === 'bindingLine' ? 'bindingLines' : selected.type === 'dimension' ? 'dimensions' : selected.type === 'pileRow' ? 'pileRows' : null;
     if (key) { const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x1 = roundCoord(item.x1 + dx); item.y1 = roundCoord(item.y1 + dy); item.x2 = roundCoord(item.x2 + dx); item.y2 = roundCoord(item.y2 + dy); } }
@@ -765,6 +776,8 @@ export default function PlanScreen({ onNavigate }) {
   const [bindingHorizontalRows, setBindingHorizontalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingHorizontalRows) || 5));
   const [gridVisible, setGridVisible] = useState(true);
   const [sheetMode, setSheetMode] = useState('peek');
+  const [toolRailCollapsed, setToolRailCollapsed] = useState(false);
+  const toolRailSwipeRef = useRef(null);
   const [transferStatus, setTransferStatus] = useState('План автоматически сохраняется вместе с проектом');
   const planFileRef = useRef(null);
   const [customSketches, setCustomSketches] = useState(getStoredSketches);
@@ -863,6 +876,15 @@ export default function PlanScreen({ onNavigate }) {
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
   }, [selected, commitPlan]);
+  const toolRailDown = (event) => { toolRailSwipeRef.current = { x: event.clientX, y: event.clientY }; };
+  const toolRailUp = (event) => {
+    const start = toolRailSwipeRef.current; toolRailSwipeRef.current = null;
+    if (!start) return;
+    const dx = event.clientX - start.x; const dy = event.clientY - start.y;
+    if (Math.abs(dx) < Math.abs(dy) || Math.abs(dx) < 28) return;
+    if (dx < 0) setToolRailCollapsed(true);
+    if (dx > 0) setToolRailCollapsed(false);
+  };
   const toolHint = tool === 'select' ? 'Один палец — выбрать/править. Два пальца — только масштаб и перемещение поля.' : tool === 'room' ? 'Коснитесь первого угла и тяните. Край комнаты сам прилипнет к наружной стене, перегородке, узлу или сетке — миллиметры ловить не нужно.' : tool === 'polygon' ? 'Ставьте углы комнаты. Узлы магнитятся к стенам и сетке. После третьей точки нажмите первую точку.' : tool === 'dimension' ? 'Нажмите первую точку, затем вторую. Размер привяжется к узлам и сетке.' : tool === 'pileRow' ? 'Первый конец начинается под пальцем. Второй идёт за пальцем 1:1; возле узла или оси включается магнит.' : tool === 'bindingLine' ? 'Начало и конец идут за пальцем; возле стен и узлов включается магнитная привязка.' : ['window','door','gap','pile'].includes(tool) ? 'Нажмите точное место установки. Проём выбирает ближайшую стену по месту касания.' : 'Рисуйте пальцем. Магнит включается только рядом со стеной, узлом или осью.';
   const mobileEditor = <div className={`mobile-plan-fullscreen ${gridVisible ? '' : 'grid-hidden'}`}>
     <div className="mobile-release-badge" aria-label={`Версия ${MOBILE_RELEASE_LABEL}`}>{MOBILE_RELEASE_LABEL}</div>
@@ -874,7 +896,12 @@ export default function PlanScreen({ onNavigate }) {
       <div className="mobile-history-chip"><button type="button" onClick={undo} disabled={!canUndo}><Undo2 /></button><button type="button" onClick={redo} disabled={!canRedo}><Redo2 /></button></div>
       <details className="mobile-view-menu"><summary><Layers3 /><span>Вид</span><ChevronDown /></summary><div><button className="active" type="button"><Check />План</button><button type="button" onClick={() => openVisualMode('3d')}><Box />3D</button><button type="button" onClick={() => openVisualMode('frame')}><Hammer />Каркас</button><button type="button" onClick={() => openVisualMode('sip')}><Layers3 />СИП</button><button type="button" onClick={() => openVisualMode('roof')}><Home />Кровля</button><div className="mobile-view-divider">Слои</div><button type="button" className={plan.showPiles !== false ? 'layer-on' : ''} onClick={() => commitPlan((next)=>{next.showPiles = next.showPiles === false;})}>{plan.showPiles !== false ? <Check /> : <Minus />}Сваи</button><button type="button" className={plan.showBinding !== false ? 'layer-on' : ''} onClick={() => commitPlan((next)=>{next.showBinding = next.showBinding === false;})}>{plan.showBinding !== false ? <Check /> : <Minus />}Обвязка</button><button type="button" className={plan.showDimensions !== false ? 'layer-on' : ''} onClick={() => commitPlan((next)=>{next.showDimensions = next.showDimensions === false;})}>{plan.showDimensions !== false ? <Check /> : <Minus />}Размеры</button><button type="button" className={gridVisible ? 'layer-on' : ''} onClick={() => setGridVisible((v)=>!v)}>{gridVisible ? <Check /> : <Minus />}Сетка 1×1 м</button></div></details>
     </div>
-    <aside className="mobile-plan-tools"><div className="mobile-select-fixed"><button type="button" className={tool==='select'?'active':''} onClick={() => selectTool('select')}><MousePointer2 /><span>Выбор</span></button></div><div className="mobile-tools-scroll">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</div></aside>
+    <aside className={`mobile-plan-tools ${toolRailCollapsed ? 'collapsed' : ''}`} onPointerDown={toolRailDown} onPointerUp={toolRailUp}>
+      <button className="mobile-tools-peek" type="button" onClick={() => setToolRailCollapsed(false)} aria-label="Показать инструменты"><span>›</span></button>
+      <div className="mobile-select-fixed"><button type="button" className={tool==='select'?'active':''} onClick={() => selectTool('select')}><MousePointer2 /><span>Выбор</span></button></div>
+      <div className="mobile-tools-scroll">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={`${tool===id?'active ':''}${id==='autoPiles'?'auto-piles-tool':''}`} onClick={() => id === 'autoPiles' ? setAutoPileSetupOpen(true) : selectTool(id)}><Icon /><span>{label}</span></button>)}</div>
+      <div className="mobile-delete-fixed"><button type="button" className={tool==='delete'?'active':''} onClick={() => selectTool('delete')}><Trash2 /><span>Удалить</span></button></div>
+    </aside>
     <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} viewportPan={viewportPan} onViewportPan={setViewportPan} onCreated={handleCreated} onSelected={handleSelected} /><div className="mobile-pinch-tip">{toolHint}</div></div>
     {autoPileSetupOpen ? <section className="mobile-binding-setup mobile-auto-pile-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автосваи</strong><small>Сетка свай + автоматическая обвязка</small></div><button type="button" onClick={() => setAutoPileSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Свай по ширине" value={autoPileColumns} suffix="шт" onMinus={() => setAutoPileColumns((v)=>Math.max(2,Math.round(v)-1))} onPlus={() => setAutoPileColumns((v)=>Math.min(24,Math.round(v)+1))}/><MobileStepper label="Свай по длине" value={autoPileRows} suffix="шт" onMinus={() => setAutoPileRows((v)=>Math.max(2,Math.round(v)-1))} onPlus={() => setAutoPileRows((v)=>Math.min(24,Math.round(v)+1))}/></div><div className="auto-pile-preview"><strong>{autoPileColumns} × {autoPileRows}</strong><span>{autoPileColumns*autoPileRows} свай до объединения совпадающих точек</span></div><button className="button primary mobile-binding-apply" type="button" onClick={autoPiles}><Sparkles />Построить сваи и обвязку</button><p>Сетка равномерно распределяется по всему дому: крайние сваи всегда лежат на периметре.</p></section> : null}
     {bindingSetupOpen ? <section className="mobile-binding-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автообвязка</strong><small>2 ряда = только крайние линии</small></div><button type="button" onClick={() => setBindingSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Вертикальных рядов" value={bindingVerticalRows} suffix="шт" onMinus={() => setBindingVerticalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingVerticalRows((v) => Math.min(24, Math.round(v)+1))} /><MobileStepper label="Горизонтальных рядов" value={bindingHorizontalRows} suffix="шт" onMinus={() => setBindingHorizontalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingHorizontalRows((v) => Math.min(24, Math.round(v)+1))} /></div><button className="button primary mobile-binding-apply" type="button" onClick={autoBinding}><Sparkles />Построить обвязку</button><p>Ряды распределяются равномерно. После построения любую линию можно поправить вручную.</p></section> : null}

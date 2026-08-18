@@ -62,7 +62,13 @@ export function collectSnapAxes(plan, excludeRoomId) {
     for (const point of roomPoints(room)) addPoint(point);
   }
   for (const wallLine of plan.walls || []) { addPoint({ x: wallLine.x1, y: wallLine.y1 }); addPoint({ x: wallLine.x2, y: wallLine.y2 }); }
-  for (const row of plan.pileRows || []) { addPoint({ x: row.x1, y: row.y1 }); addPoint({ x: row.x2, y: row.y2 }); }
+  for (const row of plan.pileRows || []) {
+    const count = Math.max(2, Math.round(Number(row.count) || 2));
+    for (let index = 0; index < count; index += 1) {
+      const ratio = index / (count - 1);
+      addPoint({ x: row.x1 + (row.x2 - row.x1) * ratio, y: row.y1 + (row.y2 - row.y1) * ratio });
+    }
+  }
   for (const binding of plan.bindingLines || []) { addPoint({ x: binding.x1, y: binding.y1 }); addPoint({ x: binding.x2, y: binding.y2 }); }
   for (const dimension of plan.dimensions || []) { addPoint({ x: dimension.x1, y: dimension.y1 }); addPoint({ x: dimension.x2, y: dimension.y2 }); }
   for (const platform of plan.platforms || []) {
@@ -302,6 +308,29 @@ export function lineEndpoints(segment) {
   return [segment.a, segment.b];
 }
 
+
+export function snapPlatformToHouse(platform, house, tolerance = 0.35) {
+  const next = { ...platform };
+  const w = Math.max(0, Number(next.w) || 0);
+  const h = Math.max(0, Number(next.h) || 0);
+  const houseW = Math.max(0, Number(house?.w) || 0);
+  const houseH = Math.max(0, Number(house?.h) || 0);
+  const tol = Math.max(0.08, Number(tolerance) || 0.35);
+  const candidates = [
+    { d: Math.abs((next.x + w) - 0), side: 'left', apply: () => { next.x = -w; } },
+    { d: Math.abs(next.x - houseW), side: 'right', apply: () => { next.x = houseW; } },
+    { d: Math.abs((next.y + h) - 0), side: 'top', apply: () => { next.y = -h; } },
+    { d: Math.abs(next.y - houseH), side: 'bottom', apply: () => { next.y = houseH; } }
+  ].sort((a, b) => a.d - b.d);
+  const best = candidates[0];
+  if (best && best.d <= tol) {
+    best.apply();
+    next.attachmentSide = best.side;
+  }
+  next.x = roundCoord(next.x);
+  next.y = roundCoord(next.y);
+  return next;
+}
 
 export function scalePlanToHouse(plan, nextWidth, nextHeight) {
   const oldW = Math.max(0.001, Number(plan?.house?.w) || 0.001);
