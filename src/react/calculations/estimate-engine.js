@@ -49,11 +49,12 @@ function compact(lines) {
 function resolveRafterStructure(project, geometry, frameLength) {
   const roof = project.settings.roof || {};
   const automatic = (roof.structureMode || 'auto') === 'auto';
-  const hasBearingSupport = (project.plan.rooms || []).some((room) => room.include !== false && room.bearing);
+  const hasBearingSupport = (project.plan.rooms || []).some((room) => room.include !== false && room.bearing) || (project.plan.walls || []).some((wall) => wall.bearing);
+  const clearSpan = Math.max(0, Number(project.plan.house?.h) || 0);
   const system = geometry.shape === 'flat'
     ? 'flat'
     : automatic
-      ? (hasBearingSupport ? 'layered' : 'hanging')
+      ? (hasBearingSupport ? 'layered' : clearSpan >= 9 ? 'truss' : 'hanging')
       : ['hanging', 'layered', 'truss'].includes(roof.rafterSystem) ? roof.rafterSystem : 'hanging';
   const step = automatic ? 0.6 : Math.min(1.2, Math.max(0.3, Number(roof.rafterStep) || 0.6));
   const section = automatic
@@ -239,7 +240,11 @@ function roofSection(project, metrics, index, inputs) {
   const anchorSpacing = Math.max(0.1, inputs.formulas.mauerlatAnchorSpacing);
   const mauerlatAnchors = mauerlatLength ? 2 * (Math.ceil(houseLength / anchorSpacing) + 1) : 0;
   const ridgeBeamLength = mainRoofShape === 'flat' ? 0 : geometry.roofLength;
-  const ridgeBeamPurchaseLength = ridgeBeamLength * inputs.formulas.ridgeBeamReserve;
+  // Геометрическая длина конька нужна для кровельной планки всегда, но несущий
+  // коньковый элемент зависит от выбранной системы. Для готовых ферм отдельная
+  // коньковая доска/прогон не требуется.
+  const structuralRidgeBeamLength = rafterStructure.system === 'truss' ? 0 : ridgeBeamLength;
+  const ridgeBeamPurchaseLength = structuralRidgeBeamLength * inputs.formulas.ridgeBeamReserve;
   const rafterReserve = rafterStructure.system === 'truss'
     ? inputs.formulas.trussRafterReserve
     : rafterStructure.system === 'hanging' ? inputs.formulas.hangingRafterReserve : inputs.formulas.layeredRafterReserve;
@@ -383,7 +388,7 @@ function roofSection(project, metrics, index, inputs) {
     coldConstructionArea: round(coldArea), warmConstructionArea: round(warmArea), gableArea: round(gableArea),
     insulatedRafterArea: round(insulatedRafterArea), terracePostCount, totalArea: round(totalArea),
     mauerlatLength: round(mauerlatLength, 3), mauerlatPurchaseLength: round(mauerlatPurchaseLength, 3), mauerlatBoardCount, mauerlatAnchors,
-    ridgeBeamLength: round(ridgeBeamLength, 3), ridgeBeamPurchaseLength: round(ridgeBeamPurchaseLength, 3),
+    ridgeBeamLength: round(ridgeBeamLength, 3), structuralRidgeBeamLength: round(structuralRidgeBeamLength, 3), ridgeBeamPurchaseLength: round(ridgeBeamPurchaseLength, 3),
     rafterLegLength: round(mainRafterLegLength, 3), rafterRequiredLength: round(mainRafterRequiredLength, 3),
     rafterBoardCount: mainRafterBoardCount, rafterPurchaseLength: round(mainRafterPurchaseLength, 3),
     mainEaveLength: round(mainEaveLength, 3), mainVergeLength: round(mainVergeLength, 3),

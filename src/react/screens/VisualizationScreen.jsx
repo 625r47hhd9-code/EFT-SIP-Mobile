@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Box, Eye, EyeOff, Grid3X3, Layers3, RotateCcw, RotateCw, Ruler, Triangle, Hammer, CircleDot, MoveUpRight } from 'lucide-react';
+import { Box, Eye, EyeOff, Grid3X3, Layers3, RotateCcw, RotateCw, Triangle, Hammer, MoveUpRight, Check, Settings2 } from 'lucide-react';
 import { useProject } from '../state/ProjectContext.jsx';
 import { calculateProject } from '../calculations/estimate-engine.js';
 import { roomPoints, unifiedWallSegments, boundsOf } from '../planner/geometry.js';
@@ -71,6 +71,29 @@ function wallPoint(side, along, z, w, h) {
 
 function wallLength(side, w, h) {
   return side === 'north' || side === 'south' ? w : h;
+}
+
+
+function ExteriorWall({ side, dims, wallHeight, quarter, faded = false }) {
+  const wall = face(sideFace(side, dims.w, dims.h, wallHeight), dims, quarter);
+  const length = wallLength(side, dims.w, dims.h);
+  const seams = [];
+  const panelStep = 1.25;
+  for (let at = panelStep; at < length - 0.08; at += panelStep) {
+    const bottom = projectIso(...wallPoint(side, at, 0, dims.w, dims.h), dims, quarter);
+    const top = projectIso(...wallPoint(side, at, wallHeight, dims.w, dims.h), dims, quarter);
+    seams.push(<line key={`${side}-${at}`} x1={bottom.x} y1={bottom.y} x2={top.x} y2={top.y} className="wall-panel-seam" />);
+  }
+  const startTop = projectIso(...wallPoint(side, 0, wallHeight, dims.w, dims.h), dims, quarter);
+  const endTop = projectIso(...wallPoint(side, length, wallHeight, dims.w, dims.h), dims, quarter);
+  const startBottom = projectIso(...wallPoint(side, 0, 0, dims.w, dims.h), dims, quarter);
+  const endBottom = projectIso(...wallPoint(side, length, 0, dims.w, dims.h), dims, quarter);
+  return <g className={faded ? 'visual-cut-wall' : ''}>
+    <polygon points={pointsAttr(wall)} className="iso-wall-full" />
+    {seams}
+    <line x1={startTop.x} y1={startTop.y} x2={endTop.x} y2={endTop.y} className="wall-top-cap" />
+    <line x1={startBottom.x} y1={startBottom.y} x2={endBottom.x} y2={endBottom.y} className="wall-bottom-cap" />
+  </g>;
 }
 
 function FloorGrid({ dims, quarter }) {
@@ -221,91 +244,73 @@ function RoomSurface({ room, index, dims, quarter }) {
   );
 }
 
-function HouseModel({ project, calculation, mode, roofHidden, quarter, cutaway, layers }) {
+function HouseModel({ project, calculation, roofHidden, quarter, cutaway, layers }) {
   const plan = project.plan;
   const dims = { w: Number(plan.house?.w) || 8, h: Number(plan.house?.h) || 10 };
   const wallHeight = Number(plan.wallHeight) || 2.5;
   const roof = project.settings?.roof || {};
   const floor = face([[0, 0, 0], [dims.w, 0, 0], [dims.w, dims.h, 0], [0, dims.h, 0]], dims, quarter);
   const exterior = ['north', 'east', 'south', 'west']
-    .map((side) => ({ side, poly: face(sideFace(side, dims.w, dims.h, wallHeight), dims, quarter) }))
-    .sort((left, right) => avgDepth(left.poly) - avgDepth(right.poly));
+    .map((side) => ({ side, depth: avgDepth(face(sideFace(side, dims.w, dims.h, wallHeight), dims, quarter)) }))
+    .sort((left, right) => left.depth - right.depth);
   const partitions = unifiedWallSegments(plan).filter((segment) => segment.axis !== 'd');
   const openings = (plan.openings || []).filter((opening) => opening.outer !== false);
   const roomPolys = (plan.rooms || []).filter((room) => room.include !== false);
-  const roofOnly = mode === 'roof';
 
   return (
-    <svg className="house-visual-svg engineering-model" viewBox="0 0 780 590" role="img" aria-label="Трёхмерная визуализация дома">
+    <svg className="house-visual-svg engineering-model polished-house-model" viewBox="0 0 780 560" role="img" aria-label="Трёхмерная визуализация дома">
       <defs>
-        <pattern id="wallTexture" width="18" height="18" patternUnits="userSpaceOnUse" patternTransform="rotate(32)">
-          <rect width="18" height="18" fill="#f8fafb" />
-          <line x1="0" y1="0" x2="0" y2="18" stroke="#d7dde2" strokeWidth="3" opacity="0.9" />
+        <pattern id="osbWallTexture" width="34" height="24" patternUnits="userSpaceOnUse">
+          <rect width="34" height="24" fill="#efe1c6" />
+          <path d="M2 6l9-3m-4 12l12-5m2-7l8 4m-10 10l11-3M1 21l7-5M25 2l6 3" stroke="#c8a879" strokeWidth="1.2" opacity=".42" />
+          <path d="M3 10l6 2m9-8l4 2m2 13l7 2" stroke="#fff" strokeWidth="1" opacity=".42" />
         </pattern>
-        <linearGradient id="wallGradientSoft" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#e8edf2" />
-        </linearGradient>
+        <pattern id="floorWoodTexture" width="46" height="18" patternUnits="userSpaceOnUse">
+          <rect width="46" height="18" fill="#e9dcc5" />
+          <path d="M0 1h46M0 17h46M15 1v16M34 1v16" stroke="#c8b89d" strokeWidth=".8" opacity=".55" />
+        </pattern>
         <linearGradient id="roofGradientVisual" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6f63ba" />
-          <stop offset="1" stopColor="#3e3a68" />
-        </linearGradient>
-        <linearGradient id="roofGradientFocus" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#8b7ae8" />
-          <stop offset="1" stopColor="#504290" />
+          <stop offset="0" stopColor="#6558aa" />
+          <stop offset="1" stopColor="#37325f" />
         </linearGradient>
         <filter id="modelShadow" x="-30%" y="-30%" width="160%" height="180%">
-          <feDropShadow dx="0" dy="14" stdDeviation="14" floodOpacity="0.18" />
+          <feDropShadow dx="0" dy="16" stdDeviation="14" floodOpacity="0.16" />
         </filter>
       </defs>
 
-      <rect x="0" y="0" width="780" height="590" className="visual-backdrop" />
-      <ellipse cx="392" cy="515" rx="280" ry="46" className="visual-ground-shadow" />
+      <rect x="0" y="0" width="780" height="560" className="visual-backdrop" />
+      <ellipse cx="392" cy="492" rx="272" ry="38" className="visual-ground-shadow" />
 
       <g filter="url(#modelShadow)">
         {layers.foundation ? <FoundationLayer plan={plan} dims={dims} quarter={quarter} /> : null}
-        <polygon points={pointsAttr(floor)} className="visual-floor" />
+        <polygon points={pointsAttr(floor)} className="visual-floor polished-floor" />
         <FloorGrid dims={dims} quarter={quarter} />
-        {mode === '3d' ? roomPolys.map((room, index) => <RoomSurface key={room.id} room={room} index={index} dims={dims} quarter={quarter} />) : null}
+        {roomPolys.map((room, index) => <RoomSurface key={room.id} room={room} index={index} dims={dims} quarter={quarter} />)}
 
         {layers.walls ? exterior.map((item, index) => {
           const near = index >= 2;
-          const fade = cutaway && near;
-          return (
-            <polygon
-              key={item.side}
-              points={pointsAttr(item.poly)}
-              className={`iso-wall-full ${fade ? 'cutaway' : ''} ${index < 2 ? 'rear-wall' : ''} ${roofOnly ? 'roof-context-wall' : ''}`}
-            />
-          );
+          return <ExteriorWall key={item.side} side={item.side} dims={dims} wallHeight={wallHeight} quarter={quarter} faded={cutaway && near} />;
         }) : null}
 
-        {layers.partitions && !roofOnly ? partitions.map((segment, index) => (
+        {layers.partitions ? partitions.map((segment, index) => (
           <PartitionFace key={index} segment={segment} dims={dims} wallHeight={wallHeight} quarter={quarter} />
         )) : null}
 
-        {layers.openings && !roofOnly ? openings.map((opening) => (
+        {layers.openings ? openings.map((opening) => (
           <OpeningShape key={opening.id} opening={opening} dims={dims} wallHeight={wallHeight} quarter={quarter} />
         )) : null}
 
         {layers.roof && !roofHidden ? (
-          <RoofGeometry dims={dims} wallHeight={wallHeight} roof={roof} quarter={quarter} roofOnly={roofOnly} />
+          <RoofGeometry dims={dims} wallHeight={wallHeight} roof={roof} quarter={quarter} />
         ) : null}
       </g>
 
-      <text x="24" y="34" className="visual-caption">
-        {formatNumber(dims.w)} × {formatNumber(dims.h)} м · стены {formatNumber(wallHeight)} м
-      </text>
-      <text x="24" y="56" className="visual-subcaption">
-        {mode === 'roof' ? 'Интерактивная крыша' : 'Главная 3D-модель'} · {roof.shape === 'flat' ? 'плоская' : 'двускатная'} кровля
-      </text>
-      <text x="24" y="78" className="visual-subcaption">
-        Комнат: {roomPolys.length} · окна/двери: {(plan.openings || []).length} · кровля: {formatNumber(calculation?.roof?.totalArea || calculation?.roof?.geometry?.totalSlopeArea || 0)} м²
-      </text>
+      <text x="24" y="32" className="visual-caption">{formatNumber(dims.w)} × {formatNumber(dims.h)} м · стены {formatNumber(wallHeight)} м</text>
+      <text x="24" y="53" className="visual-subcaption">Главная 3D-модель · {roof.shape === 'flat' ? 'плоская' : 'двускатная'} кровля</text>
+      <text x="24" y="73" className="visual-subcaption">Комнат: {roomPolys.length} · окна/двери: {(plan.openings || []).length} · кровля: {formatNumber(calculation?.roof?.totalArea || 0)} м²</text>
     </svg>
   );
 }
-
 function planOpeningSegments(opening, plan) {
   const width = Number(opening.width) || 0.9;
   if (opening.orientation === 'h') {
@@ -330,66 +335,82 @@ function PlanPreview({ project, metrics }) {
   const height = Number(plan.house?.h) || 10;
   const platforms = (plan.platforms || []).filter((item) => item.include !== false);
   const openings = plan.openings || [];
-  const padX = 76;
-  const padY = 76;
   const svgWidth = 820;
   const svgHeight = 610;
-  const scale = Math.min((svgWidth - padX * 2) / Math.max(width, 1), (svgHeight - padY * 2) / Math.max(height, 1));
-  const point = (x, y) => ({ x: padX + x * scale, y: padY + y * scale });
+  const dimensionMargin = 0.95;
+
+  let minX = 0;
+  let minY = 0;
+  let maxX = width;
+  let maxY = height;
+  platforms.forEach((platform) => {
+    minX = Math.min(minX, Number(platform.x) || 0);
+    minY = Math.min(minY, Number(platform.y) || 0);
+    maxX = Math.max(maxX, (Number(platform.x) || 0) + (Number(platform.w) || 0));
+    maxY = Math.max(maxY, (Number(platform.y) || 0) + (Number(platform.h) || 0));
+  });
+  const worldMinX = minX - dimensionMargin;
+  const worldMinY = minY - dimensionMargin;
+  const worldMaxX = maxX + dimensionMargin;
+  const worldMaxY = maxY + dimensionMargin;
+  const worldW = Math.max(1, worldMaxX - worldMinX);
+  const worldH = Math.max(1, worldMaxY - worldMinY);
+  const pad = 28;
+  const scale = Math.min((svgWidth - pad * 2) / worldW, (svgHeight - pad * 2) / worldH);
+  const point = (x, y) => ({ x: pad + (x - worldMinX) * scale, y: pad + (y - worldMinY) * scale });
+  const houseA = point(0, 0);
+  const houseB = point(width, height);
   const roomTotal = (plan.rooms || []).reduce((sum, room) => sum + polygonArea(roomPoints(room)), 0);
+  const wallStroke = clamp(scale * (Number(plan.wallThickness) || 0.174), 5, 12);
 
   const verticalGrid = [];
   const horizontalGrid = [];
-  for (let x = 0; x <= Math.ceil(width); x += 1) {
-    const p1 = point(x, 0);
-    const p2 = point(x, height);
+  for (let x = Math.ceil(minX); x <= Math.floor(maxX); x += 1) {
+    const p1 = point(x, minY);
+    const p2 = point(x, maxY);
     verticalGrid.push(<line key={`vx-${x}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} className="plan-grid-line" />);
   }
-  for (let y = 0; y <= Math.ceil(height); y += 1) {
-    const p1 = point(0, y);
-    const p2 = point(width, y);
+  for (let y = Math.ceil(minY); y <= Math.floor(maxY); y += 1) {
+    const p1 = point(minX, y);
+    const p2 = point(maxX, y);
     horizontalGrid.push(<line key={`hy-${y}`} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} className="plan-grid-line" />);
   }
 
+  const topDimY = point(0, 0).y - 24;
+  const leftDimX = point(0, 0).x - 24;
+
   return (
-    <div className="plan-preview-block">
+    <div className="plan-preview-block polished-plan-preview">
+      <div className="plan-preview-title"><span><Eye/>Просмотр плана</span><small>Редактирование отключено · только просмотр</small></div>
       <svg className="house-visual-svg plan-preview-svg" viewBox={`0 0 ${svgWidth} ${svgHeight}`} role="img" aria-label="Просмотр плана дома">
         <rect x="0" y="0" width={svgWidth} height={svgHeight} className="plan-sheet-bg" />
-        {verticalGrid}
-        {horizontalGrid}
+        {verticalGrid}{horizontalGrid}
 
         {platforms.map((platform) => {
           const p = point(Number(platform.x) || 0, Number(platform.y) || 0);
-          return (
-            <g key={platform.id}>
-              <rect x={p.x} y={p.y} width={(Number(platform.w) || 0) * scale} height={(Number(platform.h) || 0) * scale} className={`plan-platform ${platform.kind === 'porch' ? 'porch' : 'terrace'}`} />
-              <text x={p.x + ((Number(platform.w) || 0) * scale) / 2} y={p.y + ((Number(platform.h) || 0) * scale) / 2 - 4} className="plan-platform-label">
-                {platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}
-              </text>
-              <text x={p.x + ((Number(platform.w) || 0) * scale) / 2} y={p.y + ((Number(platform.h) || 0) * scale) / 2 + 12} className="plan-platform-area">
-                {formatNumber((Number(platform.w) || 0) * (Number(platform.h) || 0))} м²
-              </text>
-            </g>
-          );
+          const w = (Number(platform.w) || 0) * scale;
+          const h = (Number(platform.h) || 0) * scale;
+          return <g key={platform.id}>
+            <rect x={p.x} y={p.y} width={w} height={h} className={`plan-platform ${platform.kind === 'porch' ? 'porch' : 'terrace'}`} />
+            <text x={p.x + w / 2} y={p.y + h / 2 - 3} className="plan-platform-label">{platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'}</text>
+            <text x={p.x + w / 2} y={p.y + h / 2 + 13} className="plan-platform-area">{formatNumber((Number(platform.w) || 0) * (Number(platform.h) || 0))} м²</text>
+          </g>;
         })}
-
-        <rect x={padX} y={padY} width={width * scale} height={height * scale} className="plan-house-shell" />
-        <rect x={padX + 8} y={padY + 8} width={Math.max(0, width * scale - 16)} height={Math.max(0, height * scale - 16)} className="plan-house-core" />
 
         {(plan.rooms || []).filter((room) => room.include !== false).map((room, index) => {
           const points = roomPoints(room);
           const mapped = points.map((item) => point(Number(item.x) || 0, Number(item.y) || 0));
           const roomBounds = boundsOf(points);
           const center = point(roomBounds.x + roomBounds.w / 2, roomBounds.y + roomBounds.h / 2);
-          return (
-            <g key={room.id}>
-              <polygon points={pointsAttr(mapped)} className="plan-room" style={{ '--plan-room-fill': ROOM_SWATCHES[index % ROOM_SWATCHES.length] }} />
-              <text x={center.x} y={center.y - 10} className="plan-label">{room.name}</text>
-              <text x={center.x} y={center.y + 6} className="plan-room-meta">{formatNumber(roomBounds.w)} × {formatNumber(roomBounds.h)} м</text>
-              <text x={center.x} y={center.y + 22} className="plan-room-meta">{formatNumber(polygonArea(points))} м²</text>
-            </g>
-          );
+          return <g key={room.id}>
+            <polygon points={pointsAttr(mapped)} className="plan-room" style={{ '--plan-room-fill': ROOM_SWATCHES[index % ROOM_SWATCHES.length] }} />
+            <text x={center.x} y={center.y - 9} className="plan-label">{room.name}</text>
+            <text x={center.x} y={center.y + 7} className="plan-room-meta">{formatNumber(roomBounds.w)} × {formatNumber(roomBounds.h)} м</text>
+            <text x={center.x} y={center.y + 23} className="plan-room-meta">{formatNumber(polygonArea(points))} м²</text>
+          </g>;
         })}
+
+        <rect x={houseA.x} y={houseA.y} width={houseB.x - houseA.x} height={houseB.y - houseA.y} className="plan-house-shell" style={{ strokeWidth: wallStroke }} />
 
         {openings.map((opening) => {
           const seg = planOpeningSegments(opening, plan);
@@ -398,26 +419,25 @@ function PlanPreview({ project, metrics }) {
           return <line key={opening.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={opening.type === 'window' ? 'plan-opening-window' : 'plan-opening-door'} />;
         })}
 
-        <line x1={padX} y1={padY - 28} x2={padX + width * scale} y2={padY - 28} className="plan-dimension-line" />
-        <line x1={padX - 28} y1={padY} x2={padX - 28} y2={padY + height * scale} className="plan-dimension-line" />
-        <text x={padX + (width * scale) / 2} y={padY - 36} className="plan-dimension-text">Ширина дома {formatNumber(width)} м</text>
-        <text x={padX - 38} y={padY + (height * scale) / 2} className="plan-dimension-text vertical">Длина {formatNumber(height)} м</text>
-        <text x={svgWidth - 24} y={36} className="plan-sheet-title">Просмотр плана</text>
-        <text x={svgWidth - 24} y={58} className="plan-sheet-subtitle">Редактирование отключено · только просмотр</text>
+        <line x1={houseA.x} y1={topDimY} x2={houseB.x} y2={topDimY} className="plan-dimension-line" />
+        <line x1={houseA.x} y1={topDimY - 7} x2={houseA.x} y2={topDimY + 7} className="plan-dimension-tick" />
+        <line x1={houseB.x} y1={topDimY - 7} x2={houseB.x} y2={topDimY + 7} className="plan-dimension-tick" />
+        <text x={(houseA.x + houseB.x) / 2} y={topDimY - 10} className="plan-dimension-text">{formatNumber(width)} м</text>
+        <line x1={leftDimX} y1={houseA.y} x2={leftDimX} y2={houseB.y} className="plan-dimension-line" />
+        <line x1={leftDimX - 7} y1={houseA.y} x2={leftDimX + 7} y2={houseA.y} className="plan-dimension-tick" />
+        <line x1={leftDimX - 7} y1={houseB.y} x2={leftDimX + 7} y2={houseB.y} className="plan-dimension-tick" />
+        <text x={leftDimX - 12} y={(houseA.y + houseB.y) / 2} transform={`rotate(-90 ${leftDimX - 12} ${(houseA.y + houseB.y) / 2})`} className="plan-dimension-text">{formatNumber(height)} м</text>
       </svg>
 
-      <div className="visual-facts plan-facts-grid">
+      <div className="visual-facts plan-facts-grid compact-plan-facts">
         <article><span>Габарит</span><strong>{formatNumber(width)} × {formatNumber(height)} м</strong></article>
         <article><span>Пятно дома</span><strong>{formatNumber(metrics.floorArea)} м²</strong></article>
-        <article><span>Комнат всего</span><strong>{(plan.rooms || []).length}</strong></article>
-        <article><span>Площадь комнат</span><strong>{formatNumber(roomTotal)} м²</strong></article>
         <article><span>Перегородки</span><strong>{formatNumber(metrics.partitionLength)} м</strong></article>
         <article><span>Террасы/крыльцо</span><strong>{formatNumber(metrics.platformArea)} м²</strong></article>
       </div>
     </div>
   );
 }
-
 function PlanReadout({ project, metrics }) {
   const plan = project.plan;
   const rooms = (plan.rooms || []).filter((room) => room.include !== false);
@@ -483,6 +503,15 @@ function PlanReadout({ project, metrics }) {
   );
 }
 
+function RafterMini({ type }) {
+  return <svg viewBox="0 0 120 58" className="rafter-mini" aria-hidden="true">
+    <line x1="12" y1="47" x2="60" y2="12"/><line x1="60" y1="12" x2="108" y2="47"/>
+    {type === 'hanging' ? <line x1="18" y1="45" x2="102" y2="45"/> : null}
+    {type === 'layered' ? <><line x1="60" y1="14" x2="60" y2="47"/><line x1="60" y1="40" x2="39" y2="31"/><line x1="60" y1="40" x2="81" y2="31"/></> : null}
+    {type === 'truss' ? <><line x1="18" y1="45" x2="102" y2="45"/><line x1="60" y1="13" x2="60" y2="45"/><line x1="18" y1="45" x2="44" y2="31"/><line x1="44" y1="31" x2="60" y2="45"/><line x1="60" y1="45" x2="76" y2="31"/><line x1="76" y1="31" x2="102" y2="45"/></> : null}
+  </svg>;
+}
+
 function RafterSystemEditor({ project, calculation, setRoof }) {
   const roof = project.settings?.roof || {};
   const plan = project.plan;
@@ -493,184 +522,170 @@ function RafterSystemEditor({ project, calculation, setRoof }) {
   const step = Number(structure.step) || Number(roof.rafterStep) || 0.6;
   const span = Math.max(1, Number(plan.house?.h) || 8);
   const ridgeHeight = Math.max(0.4, Number(roof.ridgeHeight) || 1.8);
-  const hasBearingSupport = (plan.rooms || []).some((room) => room.include !== false && room.bearing);
+  const hasBearingSupport = (plan.rooms || []).some((room) => room.include !== false && room.bearing) || (plan.walls || []).some((wall) => wall.bearing);
 
   const svgW = 820;
-  const svgH = 560;
-  const wallTopY = 410;
-  const floorY = 486;
-  const leftWallX = 132;
-  const rightWallX = 688;
+  const svgH = 520;
+  const wallTopY = 386;
+  const floorY = 456;
+  const leftWallX = 142;
+  const rightWallX = 678;
   const centerX = (leftWallX + rightWallX) / 2;
-  const roofRisePx = clamp(150 + ridgeHeight * 32, 170, 250);
+  const roofRisePx = clamp(142 + ridgeHeight * 32, 158, 228);
   const ridgeY = wallTopY - roofRisePx;
   const eave = Math.max(0, Number(roof.eaveOverhang) || .5);
-  const eavePx = clamp(22 + eave * 22, 24, 56);
+  const eavePx = clamp(20 + eave * 20, 24, 52);
   const leftEaveX = leftWallX - eavePx;
   const rightEaveX = rightWallX + eavePx;
-  const tieY = wallTopY - 18;
-  const collarY = ridgeY + (wallTopY - ridgeY) * .46;
-  const supportBaseY = floorY - 4;
+  const bottomChordY = wallTopY - 16;
+  const collarY = ridgeY + (wallTopY - ridgeY) * .50;
   const rafterLeftMid = { x: (leftEaveX + centerX) / 2, y: (wallTopY + ridgeY) / 2 };
   const rafterRightMid = { x: (rightEaveX + centerX) / 2, y: (wallTopY + ridgeY) / 2 };
-  const strutHubY = wallTopY + 22;
-
-  const nodePoints = [
-    { id: 'm-left', x: leftWallX, y: wallTopY, label: '1' },
-    { id: 'm-right', x: rightWallX, y: wallTopY, label: '1' },
-    { id: 'ridge', x: centerX, y: ridgeY, label: '2' }
-  ];
-  if (system === 'hanging') {
-    nodePoints.push({ id: 'tie', x: centerX, y: tieY, label: '3' });
-  }
-  if (system === 'layered') {
-    nodePoints.push({ id: 'post', x: centerX, y: tieY, label: '3' });
-    nodePoints.push({ id: 'brace-left', x: rafterLeftMid.x, y: rafterLeftMid.y, label: '4' });
-    nodePoints.push({ id: 'brace-right', x: rafterRightMid.x, y: rafterRightMid.y, label: '4' });
-  }
-  if (system === 'truss') {
-    nodePoints.push({ id: 'bottom-left', x: leftWallX, y: tieY, label: '3' });
-    nodePoints.push({ id: 'bottom-right', x: rightWallX, y: tieY, label: '3' });
-    nodePoints.push({ id: 'king', x: centerX, y: tieY, label: '4' });
-    nodePoints.push({ id: 'web-left', x: rafterLeftMid.x, y: rafterLeftMid.y, label: '5' });
-    nodePoints.push({ id: 'web-right', x: rafterRightMid.x, y: rafterRightMid.y, label: '5' });
-  }
+  const postBaseY = floorY - 4;
+  const braceHubY = bottomChordY + 18;
+  const structuralRidgeLength = Number(calculation.roof.structuralRidgeBeamLength ?? calculation.roof.ridgeBeamLength) || 0;
 
   const setSystem = (value) => {
     setRoof('structureMode', 'manual');
     setRoof('rafterSystem', value);
   };
 
-  const systemTitle = system === 'truss'
-    ? 'Стропильная ферма'
-    : system === 'layered'
-      ? 'Наслонная стропильная пара'
-      : 'Висячая стропильная пара';
+  const systems = [
+    ['hanging', 'Висячая', 'Без внутренних опор'],
+    ['layered', 'Наслонная', 'С внутренней опорой'],
+    ['truss', 'Ферма', 'Пояса и решётка']
+  ];
+  const systemTitle = system === 'truss' ? 'Стропильная ферма' : system === 'layered' ? 'Наслонная стропильная пара' : 'Висячая стропильная пара';
+  const ridgeLabel = system === 'layered' ? 'Коньковый прогон' : system === 'hanging' ? 'Коньковая доска' : null;
 
-  return <div className="rafter-editor-shell">
-    <div className="rafter-system-choice">
-      <button type="button" className={automatic ? 'active' : ''} onClick={() => setRoof('structureMode', 'auto')}>
-        <Ruler/><span><strong>Автоматически</strong><small>{hasBearingSupport ? 'есть внутренняя несущая опора' : 'без внутренней несущей опоры'}</small></span>
-      </button>
-      <button type="button" className={!automatic && roof.rafterSystem === 'hanging' ? 'active' : ''} onClick={() => setSystem('hanging')}>
-        <Triangle/><span><strong>Висячая</strong><small>пара + затяжка</small></span>
-      </button>
-      <button type="button" className={!automatic && roof.rafterSystem === 'layered' ? 'active' : ''} onClick={() => setSystem('layered')}>
-        <MoveUpRight/><span><strong>Наслонная</strong><small>стойка + подкосы</small></span>
-      </button>
-      <button type="button" className={!automatic && roof.rafterSystem === 'truss' ? 'active' : ''} onClick={() => setSystem('truss')}>
-        <Hammer/><span><strong>Ферма</strong><small>пояса + раскосы</small></span>
+  const nodes = [
+    { id: 'left-support', x: leftWallX, y: wallTopY, label: 1 },
+    { id: 'right-support', x: rightWallX, y: wallTopY, label: 1 },
+    { id: 'ridge', x: centerX, y: ridgeY, label: 2 }
+  ];
+  if (system === 'hanging') nodes.push({ id: 'tie', x: centerX, y: bottomChordY, label: 3 });
+  if (system === 'layered') {
+    nodes.push({ id: 'post', x: centerX, y: bottomChordY, label: 3 });
+    nodes.push({ id: 'brace-left', x: rafterLeftMid.x, y: rafterLeftMid.y, label: 4 });
+    nodes.push({ id: 'brace-right', x: rafterRightMid.x, y: rafterRightMid.y, label: 4 });
+  }
+  if (system === 'truss') {
+    nodes.push({ id: 'bottom', x: centerX, y: bottomChordY, label: 3 });
+    nodes.push({ id: 'king', x: centerX, y: (ridgeY + bottomChordY) / 2, label: 4 });
+    nodes.push({ id: 'web-left', x: rafterLeftMid.x, y: rafterLeftMid.y, label: 5 });
+    nodes.push({ id: 'web-right', x: rafterRightMid.x, y: rafterRightMid.y, label: 5 });
+  }
+
+  return <div className="rafter-editor-shell polished-rafter-editor">
+    <div className="rafter-auto-row">
+      <button type="button" className={automatic ? 'active' : ''} onClick={() => setRoof('structureMode', automatic ? 'manual' : 'auto')}>
+        <Settings2/><span><strong>Автоматически по плану</strong><small>{automatic ? `выбрано: ${system === 'layered' ? 'наслонная' : system === 'truss' ? 'ферма' : 'висячая'}` : 'ручной выбор'}</small></span><i className={automatic ? 'on' : ''}/>
       </button>
     </div>
 
+    <div className="rafter-system-choice three-cards">
+      {systems.map(([id, label, note]) => <button key={id} type="button" className={system === id ? 'active' : ''} onClick={() => setSystem(id)}>
+        <span className="rafter-choice-graphic"><RafterMini type={id}/>{system === id ? <b><Check/></b> : null}</span>
+        <strong>{label}</strong><small>{note}</small>
+      </button>)}
+    </div>
+
+    {system === 'layered' && !hasBearingSupport ? <div className="rafter-tech-warning"><strong>Для наслонной схемы нужна внутренняя несущая опора.</strong><span>На плане такая опора сейчас не отмечена. Добавьте или отметьте несущую стену, чтобы автоматический расчёт использовал эту схему корректно.</span></div> : null}
+    {system === 'hanging' && span >= 9 ? <div className="rafter-tech-warning"><strong>Большой пролёт: {formatNumber(span)} м.</strong><span>Простую висячую пару на таком пролёте нельзя принимать только по геометрии. В автоматическом режиме для пролёта от 9 м без внутренней опоры выбирается ферма; окончательное сечение требует расчёта по снеговой и ветровой нагрузке.</span></div> : null}
+
     <div className="rafter-canvas-card">
       <div className="rafter-canvas-head">
-        <div><strong>{systemTitle}</strong><span>Поперечный разрез · все основные опорные и соединительные узлы</span></div>
+        <div><strong>{systemTitle}</strong><span>Рабочий поперечный разрез · опоры и соединительные узлы</span></div>
         <em>{section.replace('x', '×')} мм · шаг {formatNumber(step)} м</em>
       </div>
       <svg className="rafter-editor-svg" viewBox={`0 0 ${svgW} ${svgH}`} role="img" aria-label="Схема стропильной системы в разрезе">
         <defs>
-          <linearGradient id="rafterWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#d8a467"/><stop offset="1" stopColor="#9a6332"/></linearGradient>
-          <pattern id="rafterGrid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#eceef2" strokeWidth="1"/></pattern>
+          <linearGradient id="rafterWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#d5a267"/><stop offset="1" stopColor="#a26b35"/></linearGradient>
+          <pattern id="rafterGrid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#edf0f4" strokeWidth="1"/></pattern>
+          <pattern id="masonryPattern" width="22" height="12" patternUnits="userSpaceOnUse"><rect width="22" height="12" fill="#eef1f2"/><path d="M0 0h22M0 12h22M0 6h22M11 0v6M5.5 6v6M16.5 6v6" stroke="#c5cbd0" strokeWidth=".7"/></pattern>
         </defs>
-        <rect x="0" y="0" width={svgW} height={svgH} className="rafter-bg" />
-        <rect x="0" y="0" width={svgW} height={svgH} fill="url(#rafterGrid)" />
+        <rect width={svgW} height={svgH} className="rafter-bg"/><rect width={svgW} height={svgH} fill="url(#rafterGrid)"/>
 
-        <rect x={leftWallX - 28} y={wallTopY} width="56" height={floorY - wallTopY} className="rafter-wall" />
-        <rect x={rightWallX - 28} y={wallTopY} width="56" height={floorY - wallTopY} className="rafter-wall" />
-        <line x1={leftWallX - 50} y1={floorY} x2={rightWallX + 50} y2={floorY} className="rafter-floor-line" />
+        <rect x={leftWallX - 30} y={wallTopY} width="60" height={floorY - wallTopY} fill="url(#masonryPattern)" className="rafter-wall"/>
+        <rect x={rightWallX - 30} y={wallTopY} width="60" height={floorY - wallTopY} fill="url(#masonryPattern)" className="rafter-wall"/>
+        <line x1={leftWallX - 54} y1={floorY} x2={rightWallX + 54} y2={floorY} className="rafter-floor-line"/>
+        <rect x={leftWallX - 43} y={wallTopY - 11} width="86" height="16" rx="3" className="mauerlat-beam"/>
+        <rect x={rightWallX - 43} y={wallTopY - 11} width="86" height="16" rx="3" className="mauerlat-beam"/>
 
-        <rect x={leftWallX - 42} y={wallTopY - 10} width="84" height="15" rx="3" className="mauerlat-beam" />
-        <rect x={rightWallX - 42} y={wallTopY - 10} width="84" height="15" rx="3" className="mauerlat-beam" />
+        <line x1={leftEaveX} y1={wallTopY + 3} x2={centerX} y2={ridgeY} className="main-rafter"/>
+        <line x1={centerX} y1={ridgeY} x2={rightEaveX} y2={wallTopY + 3} className="main-rafter"/>
 
-        <line x1={leftEaveX} y1={wallTopY + 2} x2={centerX} y2={ridgeY} className="main-rafter" />
-        <line x1={centerX} y1={ridgeY} x2={rightEaveX} y2={wallTopY + 2} className="main-rafter" />
-        <rect x={centerX - 9} y={ridgeY - 14} width="18" height="34" rx="4" className="ridge-beam" />
+        {system !== 'truss' ? <rect x={centerX - 7} y={ridgeY - 12} width="14" height="28" rx="3" className="ridge-beam"/> : null}
 
         {system === 'hanging' ? <>
-          <line x1={leftWallX} y1={tieY} x2={rightWallX} y2={tieY} className="rafter-tie" />
-          <line x1={centerX - 85} y1={collarY} x2={centerX + 85} y2={collarY} className="rafter-collar" />
+          <line x1={leftWallX} y1={bottomChordY} x2={rightWallX} y2={bottomChordY} className="rafter-tie"/>
+          <line x1={centerX - 84} y1={collarY} x2={centerX + 84} y2={collarY} className="rafter-collar"/>
         </> : null}
 
         {system === 'layered' ? <>
-          <line x1={leftWallX} y1={tieY} x2={rightWallX} y2={tieY} className="rafter-tie ghost" />
-          <rect x={centerX - 18} y={supportBaseY - 16} width="36" height="16" rx="3" className="bearing-bed" />
-          <line x1={centerX} y1={supportBaseY - 16} x2={centerX} y2={ridgeY + 18} className="rafter-post" />
-          <line x1={centerX} y1={strutHubY} x2={rafterLeftMid.x} y2={rafterLeftMid.y} className="rafter-brace" />
-          <line x1={centerX} y1={strutHubY} x2={rafterRightMid.x} y2={rafterRightMid.y} className="rafter-brace" />
-          <line x1={centerX - 112} y1={collarY} x2={centerX + 112} y2={collarY} className="rafter-collar" />
+          <rect x={centerX - 24} y={postBaseY - 18} width="48" height="18" rx="3" className="bearing-bed"/>
+          <rect x={centerX - 30} y={postBaseY} width="60" height={floorY - postBaseY + 2} fill="url(#masonryPattern)" className="inner-bearing-wall"/>
+          <line x1={centerX} y1={postBaseY - 18} x2={centerX} y2={ridgeY + 16} className="rafter-post"/>
+          <line x1={centerX} y1={braceHubY} x2={rafterLeftMid.x} y2={rafterLeftMid.y} className="rafter-brace"/>
+          <line x1={centerX} y1={braceHubY} x2={rafterRightMid.x} y2={rafterRightMid.y} className="rafter-brace"/>
+          <line x1={centerX - 108} y1={collarY} x2={centerX + 108} y2={collarY} className="rafter-collar"/>
         </> : null}
 
         {system === 'truss' ? <>
-          <line x1={leftWallX} y1={tieY} x2={rightWallX} y2={tieY} className="truss-bottom-chord" />
-          <line x1={centerX} y1={ridgeY} x2={centerX} y2={tieY} className="truss-web" />
-          <line x1={leftWallX} y1={tieY} x2={centerX} y2={ridgeY} className="truss-top-chord overlay" />
-          <line x1={rightWallX} y1={tieY} x2={centerX} y2={ridgeY} className="truss-top-chord overlay" />
-          <line x1={leftWallX} y1={tieY} x2={rafterRightMid.x} y2={rafterRightMid.y} className="truss-web" />
-          <line x1={rightWallX} y1={tieY} x2={rafterLeftMid.x} y2={rafterLeftMid.y} className="truss-web" />
-          <line x1={centerX} y1={tieY} x2={rafterLeftMid.x} y2={rafterLeftMid.y} className="truss-web secondary" />
-          <line x1={centerX} y1={tieY} x2={rafterRightMid.x} y2={rafterRightMid.y} className="truss-web secondary" />
+          <line x1={leftWallX} y1={bottomChordY} x2={rightWallX} y2={bottomChordY} className="truss-bottom-chord"/>
+          <line x1={centerX} y1={ridgeY} x2={centerX} y2={bottomChordY} className="truss-web"/>
+          <line x1={leftWallX} y1={bottomChordY} x2={rafterRightMid.x} y2={rafterRightMid.y} className="truss-web"/>
+          <line x1={rightWallX} y1={bottomChordY} x2={rafterLeftMid.x} y2={rafterLeftMid.y} className="truss-web"/>
+          <line x1={centerX} y1={bottomChordY} x2={rafterLeftMid.x} y2={rafterLeftMid.y} className="truss-web secondary"/>
+          <line x1={centerX} y1={bottomChordY} x2={rafterRightMid.x} y2={rafterRightMid.y} className="truss-web secondary"/>
         </> : null}
 
-        {nodePoints.map((node) => <g key={node.id} className="rafter-node"><circle cx={node.x} cy={node.y} r="8"/><text x={node.x} y={node.y + 3}>{node.label}</text></g>)}
+        {nodes.map((node) => <g key={node.id} className="rafter-node"><circle cx={node.x} cy={node.y} r="9"/><text x={node.x} y={node.y + 3}>{node.label}</text></g>)}
 
-        <line x1={leftWallX} y1={518} x2={rightWallX} y2={518} className="rafter-dim-line" />
-        <line x1={leftWallX} y1={508} x2={leftWallX} y2={528} className="rafter-dim-tick" />
-        <line x1={rightWallX} y1={508} x2={rightWallX} y2={528} className="rafter-dim-tick" />
-        <text x={centerX} y={542} className="rafter-dim-text">пролёт {formatNumber(span)} м</text>
+        <line x1={leftWallX} y1="486" x2={rightWallX} y2="486" className="rafter-dim-line"/><line x1={leftWallX} y1="478" x2={leftWallX} y2="494" className="rafter-dim-tick"/><line x1={rightWallX} y1="478" x2={rightWallX} y2="494" className="rafter-dim-tick"/><text x={centerX} y="510" className="rafter-dim-text">пролёт {formatNumber(span)} м</text>
+        <line x1="742" y1={wallTopY} x2="742" y2={ridgeY} className="rafter-dim-line"/><line x1="734" y1={wallTopY} x2="750" y2={wallTopY} className="rafter-dim-tick"/><line x1="734" y1={ridgeY} x2="750" y2={ridgeY} className="rafter-dim-tick"/><text x="762" y={(wallTopY + ridgeY) / 2} transform={`rotate(-90 762 ${(wallTopY + ridgeY) / 2})`} className="rafter-dim-text">конёк {formatNumber(ridgeHeight)} м</text>
 
-        <line x1={742} y1={wallTopY} x2={742} y2={ridgeY} className="rafter-dim-line" />
-        <line x1={732} y1={wallTopY} x2={752} y2={wallTopY} className="rafter-dim-tick" />
-        <line x1={732} y1={ridgeY} x2={752} y2={ridgeY} className="rafter-dim-tick" />
-        <text x={760} y={(wallTopY + ridgeY) / 2} className="rafter-dim-text vertical">конёк {formatNumber(ridgeHeight)} м</text>
-
-        <g className="rafter-callout"><path d={`M${leftWallX - 6} ${wallTopY - 4} L82 345 L34 345`}/><text x="30" y="336">Мауэрлат 100×150</text></g>
-        <g className="rafter-callout"><path d={`M${centerX + 7} ${ridgeY} L560 ${ridgeY - 46} L700 ${ridgeY - 46}`}/><text x="704" y={ridgeY - 50}>Коньковый прогон</text></g>
-        <g className="rafter-callout"><path d={`M${rafterLeftMid.x} ${rafterLeftMid.y} L160 220 L42 220`}/><text x="38" y="211">Стропильная нога {section.replace('x','×')}</text></g>
-        {system === 'hanging' ? <g className="rafter-callout"><path d={`M${centerX - 100} ${tieY} L180 452 L42 452`}/><text x="38" y="444">Затяжка / балка</text></g> : null}
+        <g className="rafter-callout"><path d={`M${leftWallX - 8} ${wallTopY - 4} L74 346 L24 346`}/><text x="24" y="337">Мауэрлат 100×150</text></g>
+        <g className="rafter-callout"><path d={`M${rafterLeftMid.x} ${rafterLeftMid.y} L158 208 L36 208`}/><text x="32" y="198">Стропильная нога {section.replace('x','×')}</text></g>
+        {ridgeLabel ? <g className="rafter-callout"><path d={`M${centerX + 6} ${ridgeY} L566 ${ridgeY - 38} L694 ${ridgeY - 38}`}/><text x="698" y={ridgeY - 42}>{ridgeLabel}</text></g> : null}
+        {system === 'hanging' ? <g className="rafter-callout"><path d={`M${centerX - 106} ${bottomChordY} L176 432 L30 432`}/><text x="26" y="423">Затяжка / балка перекрытия</text></g> : null}
         {system === 'layered' ? <>
-          <g className="rafter-callout"><path d={`M${centerX} ${strutHubY} L590 370 L720 370`}/><text x="724" y="365">Стойка под конёк</text></g>
-          <g className="rafter-callout"><path d={`M${rafterRightMid.x} ${rafterRightMid.y} L635 275 L736 275`}/><text x="740" y="270">Подкос</text></g>
+          <g className="rafter-callout"><path d={`M${centerX} ${braceHubY} L590 354 L716 354`}/><text x="720" y="349">Стойка под прогон</text></g>
+          <g className="rafter-callout"><path d={`M${rafterRightMid.x} ${rafterRightMid.y} L628 265 L718 265`}/><text x="722" y="260">Подкос</text></g>
+          <g className="rafter-callout"><path d={`M${centerX} ${postBaseY} L586 430 L718 430`}/><text x="722" y="425">Внутренняя несущая опора</text></g>
         </> : null}
         {system === 'truss' ? <>
-          <g className="rafter-callout"><path d={`M${centerX} ${tieY} L585 452 L720 452`}/><text x="724" y="447">Нижний пояс</text></g>
-          <g className="rafter-callout"><path d={`M${centerX} ${(ridgeY + tieY)/2} L610 315 L730 315`}/><text x="734" y="310">Стойка / раскосы</text></g>
+          <g className="rafter-callout"><path d={`M${centerX + 62} ${bottomChordY} L590 428 L714 428`}/><text x="718" y="423">Нижний пояс</text></g>
+          <g className="rafter-callout"><path d={`M${rafterRightMid.x} ${rafterRightMid.y} L625 276 L718 276`}/><text x="722" y="271">Раскосы фермы</text></g>
         </> : null}
       </svg>
 
       <div className="rafter-node-legend">
-        <span><i>1</i>опирание на мауэрлат</span>
-        <span><i>2</i>коньковый узел</span>
+        <span><i>1</i>опирание на мауэрлат</span><span><i>2</i>коньковый узел</span>
         {system === 'hanging' ? <span><i>3</i>затяжка</span> : null}
-        {system === 'layered' ? <><span><i>3</i>центральная стойка</span><span><i>4</i>подкос</span></> : null}
+        {system === 'layered' ? <><span><i>3</i>стойка</span><span><i>4</i>подкос</span></> : null}
         {system === 'truss' ? <><span><i>3</i>нижний пояс</span><span><i>4</i>стойка</span><span><i>5</i>раскос</span></> : null}
       </div>
     </div>
 
-    <Panel title="Параметры стропильной системы" description="Выбор здесь меняет ту же конструкцию и расчёт, что используются в основном калькуляторе.">
-      <div className="form-grid four">
-        <SelectField label="Режим" value={roof.structureMode || 'auto'} onChange={(value) => setRoof('structureMode', value)} options={[{ value: 'auto', label: 'Автоматически по плану' }, { value: 'manual', label: 'Ручной выбор' }]} />
-        <SelectField label="Система" value={system} disabled={automatic} onChange={(value) => setSystem(value)} options={[{ value: 'hanging', label: 'Висячая стропильная пара' }, { value: 'layered', label: 'Наслонная стропильная пара' }, { value: 'truss', label: 'Стропильная ферма' }]} />
-        <NumberField label="Чистый шаг" value={step} suffix="м" min={0.3} max={1.2} step={0.05} disabled={automatic} onChange={(value) => setRoof('rafterStep', value)} />
-        <SelectField label="Сечение стропил" value={section} disabled={automatic} onChange={(value) => setRoof('rafterSection', value)} options={[{ value: '50x150', label: '50×150 мм' }, { value: '50x200', label: '50×200 мм' }]} />
+    <Panel title="Параметры стропильной системы" description="Настройки связаны с тем же расчётом, который используется в основном калькуляторе.">
+      <div className="rafter-param-summary">
+        <article><span>Режим расчёта</span><strong>{automatic ? 'Автоматический' : 'Ручной'}</strong></article>
+        <article><span>Выбранная система</span><strong>{system === 'layered' ? 'Наслонная' : system === 'truss' ? 'Ферма' : 'Висячая'}</strong></article>
+        <article><span>Сечение</span><strong>{section.replace('x','×')} мм</strong></article>
+        <article><span>Шаг</span><strong>{Math.round(step * 1000)} мм</strong></article>
+        <article><span>Количество</span><strong>{structure.pairCount || 0} {system === 'truss' ? 'ферм' : 'пар'}</strong></article>
+        <article><span>{system === 'layered' ? 'Коньковый прогон' : system === 'hanging' ? 'Коньковая доска' : 'Коньковый элемент'}</span><strong>{system === 'truss' ? 'не требуется' : `${formatNumber(structuralRidgeLength)} м.п.`}</strong></article>
+      </div>
+      <div className="form-grid four rafter-edit-fields">
         <NumberField label="Высота конька" value={roof.ridgeHeight} suffix="м" min={0.4} step={0.1} onChange={(value) => setRoof('ridgeHeight', value)} />
-        <div className="readout roof-readout-box"><span>Внутренняя несущая опора</span><strong>{hasBearingSupport ? 'есть на плане' : 'не задана'}</strong></div>
-        <div className="readout roof-readout-box"><span>Количество</span><strong>{system === 'truss' ? `${structure.pairCount || 0} ферм` : `${structure.pairCount || 0} стропильных пар`}</strong></div>
-        <div className="readout roof-readout-box"><span>Стропильных ног</span><strong>{structure.legCount || 0} шт.</strong></div>
+        <NumberField label="Чистый шаг" value={step} suffix="м" min={0.3} max={1.2} step={0.05} disabled={automatic} onChange={(value) => setRoof('rafterStep', value)} />
+        <SelectField label="Сечение" value={section} disabled={automatic} onChange={(value) => setRoof('rafterSection', value)} options={[{ value: '50x150', label: '50×150 мм' }, { value: '50x200', label: '50×200 мм' }]} />
+        <div className="readout roof-readout-box"><span>Внутренняя опора</span><strong>{hasBearingSupport ? 'задана на плане' : 'не задана'}</strong></div>
       </div>
     </Panel>
-
-    <div className="visual-facts rafter-facts-grid">
-      <article><span>Мауэрлат</span><strong>{formatNumber(calculation.roof.mauerlatLength)} м.п.</strong></article>
-      <article><span>Коньковый прогон</span><strong>{formatNumber(calculation.roof.ridgeBeamLength)} м.п.</strong></article>
-      <article><span>Стропильная доска</span><strong>{calculation.roof.rafterBoardCount || 0} шт. × 6 м</strong></article>
-      <article><span>Шаг системы</span><strong>{Math.round(step * 1000)} мм</strong></article>
-      <article><span>Сечение</span><strong>{section.replace('x', '×')} мм</strong></article>
-      <article><span>Скат</span><strong>{formatNumber(calculation.roof.geometry?.slopeLength)} м</strong></article>
-    </div>
   </div>;
 }
-
 export default function VisualizationScreen() {
   const { project, commit } = useProject();
   const [mode, setModeState] = useState(() => {
@@ -681,9 +696,9 @@ export default function VisualizationScreen() {
     sessionStorage.setItem('eft-visual-mode', nextMode);
     setModeState(nextMode);
   };
-  const [roofHidden, setRoofHidden] = useState(false);
+  const [roofHidden, setRoofHidden] = useState(true);
   const [quarter, setQuarter] = useState(0);
-  const [cutaway, setCutaway] = useState(false);
+  const [cutaway, setCutaway] = useState(true);
   const [showLayers, setShowLayers] = useState(false);
   const [layers, setLayers] = useState({ walls: true, partitions: true, openings: true, roof: true, foundation: true });
 
@@ -704,12 +719,8 @@ export default function VisualizationScreen() {
   return (
     <section className="visualization-screen engineering-visualization m771-visualization">
       <div className="mobile-screen-intro visualization-intro">
-        <span className="eyebrow">Инженерная визуализация · M7.7.3</span>
-        <h1>3D-вид, обзорный план и стропильная система</h1>
-        <p>
-          Основной упор теперь на главный красивый 3D-блок, отдельный план только для просмотра
-          и отдельная инженерная схема стропильной системы с узлами конструкции.
-        </p>
+        <span className="eyebrow">Инженерная визуализация · M7.7.4</span>
+        <h1>3D-вид, план и стропильная система</h1><p>Рабочая визуализация проекта.</p>
       </div>
 
       <nav className="visual-mode-tabs visual-mode-tabs-three" aria-label="Режим визуализации">
@@ -730,7 +741,6 @@ export default function VisualizationScreen() {
           <HouseModel
             project={project}
             calculation={calculation}
-            mode={mode}
             roofHidden={roofHidden}
             quarter={quarter}
             cutaway={cutaway}
@@ -754,7 +764,7 @@ export default function VisualizationScreen() {
           <div className="visual-stage-actions">
             <button type="button" className={cutaway ? 'active' : ''} onClick={() => setCutaway((current) => !current)}>
               <Eye />
-              <span>{cutaway ? 'Разрез включён' : 'Разрез'}</span>
+              <span>{cutaway ? 'Открытый вид' : 'Все стены'}</span>
             </button>
             <button type="button" className={showLayers ? 'active' : ''} onClick={() => setShowLayers((current) => !current)}>
               <Layers3 />
@@ -787,10 +797,10 @@ export default function VisualizationScreen() {
           </div>
         ) : null}
 
-        <div className="visual-stage-badge">
+        {mode === '3d' ? <div className="visual-stage-badge">
           <RotateCcw />
-          <span>{mode === 'plan' ? 'Только просмотр' : mode === 'rafters' ? 'Разрез стропильной системы' : 'Связано с основным планом'}</span>
-        </div>
+          <span>Связано с основным планом</span>
+        </div> : null}
       </article>
 
       {mode === '3d' ? (

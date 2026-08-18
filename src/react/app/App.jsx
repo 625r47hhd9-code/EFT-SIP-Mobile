@@ -304,7 +304,7 @@ export function App() {
     <div className={`app mobile-app-shell ${section === 'home' && active === 'plan' ? 'plan-editor-active' : ''}`} data-theme={theme}>
       <header className="mobile-topbar">
         <div className="mobile-topbar-main">
-          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M7 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
+          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M7.7.4 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
           <button className="mobile-more-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /></button>
         </div>
         <div className="mobile-total-strip">

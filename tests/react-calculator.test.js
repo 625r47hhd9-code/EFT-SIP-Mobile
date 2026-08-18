@@ -630,3 +630,33 @@ test('automatic pile grid respects requested width/length counts and matching bi
   assert.equal(foundation.housePiles, 12);
   assert.equal(project.plan.bindingLines.length, 7);
 });
+
+test('truss system keeps roof ridge flashing but does not purchase a structural ridge board', () => {
+  const project = createDefaultProject();
+  project.settings.roof.structureMode = 'manual';
+  project.settings.roof.rafterSystem = 'truss';
+  const result = calculateProject(project);
+  assert.ok(result.roof.ridgeBeamLength > 0);
+  assert.equal(result.roof.structuralRidgeBeamLength, 0);
+  assert.equal(result.roof.ridgeBeamPurchaseLength, 0);
+  assert.ok(result.lines.some((line) => line.id === 'roof:ridge'));
+});
+
+test('automatic rafter selection detects a bearing drawn wall as an internal support', () => {
+  const project = createDefaultProject();
+  project.settings.roof.structureMode = 'auto';
+  project.plan.rooms.forEach((room) => { room.bearing = false; });
+  project.plan.walls.push({ id: 'bearing-wall', x1: 0.5, y1: project.plan.house.h / 2, x2: project.plan.house.w - 0.5, y2: project.plan.house.h / 2, bearing: true });
+  const result = calculateProject(project);
+  assert.equal(result.roof.rafterStructure.system, 'layered');
+});
+
+test('automatic roof prefers trusses for a long clear span without an internal bearing support', () => {
+  const project = createDefaultProject();
+  project.settings.roof.structureMode = 'auto';
+  project.plan.house.h = 10;
+  project.plan.rooms.forEach((room) => { room.bearing = false; });
+  project.plan.walls = (project.plan.walls || []).map((wall) => ({ ...wall, bearing: false }));
+  const result = calculateProject(project);
+  assert.equal(result.roof.rafterStructure.system, 'truss');
+});
