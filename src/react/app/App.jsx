@@ -33,7 +33,7 @@ const BOTTOM_NAV = [
 const GROUP_SCREENS = {
   home: [
     { id: 'visualization', label: '3D', icon: Box },
-    { id: 'plan', label: 'План', icon: Ruler },
+    { id: 'plan', label: 'Редактор плана', icon: Ruler },
     { id: 'parameters', label: 'Параметры', icon: Settings2 }
   ],
   construction: [
