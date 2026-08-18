@@ -1,4 +1,4 @@
-const CACHE_NAME = 'eft-sip-mobile-m7-6-1';
+const CACHE_NAME = 'eft-sip-mobile-m7-7-0';
 const STATIC_CACHE = [
   './manifest.webmanifest',
   './icons/eft-logo.png'
