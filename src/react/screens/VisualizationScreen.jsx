@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Box, Eye, EyeOff, Grid3X3, Home, Layers3, RotateCcw, RotateCw, Ruler, DoorOpen, SquareStack } from 'lucide-react';
+import { Box, Eye, EyeOff, Grid3X3, Home, Layers3, RotateCcw, RotateCw, Ruler, Triangle, Rows3, Waves, SlidersHorizontal } from 'lucide-react';
 import { useProject } from '../state/ProjectContext.jsx';
 import { calculateProject } from '../calculations/estimate-engine.js';
 import { roomPoints, unifiedWallSegments, boundsOf } from '../planner/geometry.js';
@@ -12,6 +12,20 @@ const MODES = [
   ['plan', 'План', Grid3X3],
   ['roof', 'Кровля', Home]
 ];
+
+const ROOF_VIEW_LAYERS = [
+  ['structure', 'Несущая', Triangle],
+  ['counter', 'Контробрешётка', Rows3],
+  ['lath', 'Обрешётка', Grid3X3],
+  ['cover', 'Кровля', Waves]
+];
+
+const RAFTER_SYSTEM_LABELS = {
+  hanging: 'Висячая стропильная система',
+  layered: 'Наслонная стропильная система',
+  truss: 'Стропильные фермы',
+  flat: 'Плоская кровля'
+};
 
 const ROOM_SWATCHES = ['#f4eefc', '#eef7ff', '#eef8f1', '#fff6e8', '#f7eef6', '#edf2ff'];
 
@@ -476,6 +490,141 @@ function PlanReadout({ project, metrics }) {
   );
 }
 
+function RoofPlanEditor({ project, calculation, setRoof }) {
+  const [layer, setLayer] = useState('structure');
+  const roof = project.settings?.roof || {};
+  const plan = project.plan;
+  const structure = calculation.roof.rafterStructure || {};
+  const houseW = Math.max(0.1, Number(plan.house?.w) || 8);
+  const houseH = Math.max(0.1, Number(plan.house?.h) || 10);
+  const gableOverhang = Math.max(0, Number(roof.gableOverhang) || 0);
+  const eaveOverhang = Math.max(0, Number(roof.eaveOverhang) || 0);
+  const roofW = houseW + gableOverhang * 2;
+  const roofH = houseH + eaveOverhang * 2;
+  const svgW = 820;
+  const svgH = 570;
+  const padX = 72;
+  const padY = 82;
+  const scale = Math.min((svgW - padX * 2) / roofW, (svgH - padY * 2) / roofH);
+  const px = (x) => padX + (x + gableOverhang) * scale;
+  const py = (y) => padY + (y + eaveOverhang) * scale;
+  const roofLeft = px(-gableOverhang);
+  const roofTop = py(-eaveOverhang);
+  const roofWidth = roofW * scale;
+  const roofHeight = roofH * scale;
+  const houseLeft = px(0);
+  const houseTop = py(0);
+  const houseWidth = houseW * scale;
+  const houseHeight = houseH * scale;
+  const ridgeY = py(houseH / 2);
+  const pairCount = Math.max(2, Number(structure.pairCount) || Math.ceil(houseW / Math.max(.3, Number(roof.rafterStep) || .6)) + 1);
+  const system = structure.system || roof.rafterSystem || 'hanging';
+  const activeStep = Number(structure.step) || Number(roof.rafterStep) || .6;
+  const lathStep = Math.max(.1, Number(roof.lathStep) || .35);
+  const slopeLength = Math.max(.1, Number(calculation.roof.geometry?.slopeLength) || houseH / 2);
+  const horizontalRun = Math.max(.1, roofH / 2);
+  const projectedLathStep = Math.max(.05, lathStep * horizontalRun / slopeLength);
+  const coverModule = 1.05;
+
+  const rafterXs = Array.from({ length: pairCount }, (_, index) => {
+    const ratio = pairCount <= 1 ? 0 : index / (pairCount - 1);
+    return px(ratio * houseW);
+  });
+
+  const lathYs = [];
+  for (let y = -eaveOverhang; y <= houseH / 2 + .001; y += projectedLathStep) lathYs.push(py(y));
+  for (let y = houseH + eaveOverhang; y >= houseH / 2 - .001; y -= projectedLathStep) lathYs.push(py(y));
+
+  const coverXs = [];
+  for (let x = -gableOverhang; x <= houseW + gableOverhang + .001; x += coverModule) coverXs.push(px(x));
+
+  const gridLines = [];
+  for (let x = Math.floor(-gableOverhang); x <= Math.ceil(houseW + gableOverhang); x += 1) {
+    gridLines.push(<line key={`rgx-${x}`} x1={px(x)} y1={roofTop} x2={px(x)} y2={roofTop + roofHeight} className="roof-editor-grid-line" />);
+  }
+  for (let y = Math.floor(-eaveOverhang); y <= Math.ceil(houseH + eaveOverhang); y += 1) {
+    gridLines.push(<line key={`rgy-${y}`} x1={roofLeft} y1={py(y)} x2={roofLeft + roofWidth} y2={py(y)} className="roof-editor-grid-line" />);
+  }
+
+  const structureLines = rafterXs.map((x, index) => {
+    if (system === 'truss') {
+      return <g key={`truss-${index}`} className="roof-truss-top"><line x1={x} y1={roofTop} x2={x} y2={roofTop + roofHeight} /><circle cx={x} cy={ridgeY} r="4" /><circle cx={x} cy={houseTop} r="3" /><circle cx={x} cy={houseTop + houseHeight} r="3" /></g>;
+    }
+    return <g key={`rafter-${index}`} className="roof-rafter-top"><line x1={x} y1={roofTop} x2={x} y2={ridgeY} /><line x1={x} y1={ridgeY} x2={x} y2={roofTop + roofHeight} /></g>;
+  });
+
+  const layerDescription = layer === 'structure'
+    ? (system === 'truss' ? 'Расстановка стропильных ферм по длине дома' : 'Расстановка пар стропил и линия конька')
+    : layer === 'counter'
+      ? 'Контробрешётка идёт по стропилам от карниза к коньку'
+      : layer === 'lath'
+        ? `Обрешётка поперёк стропил · шаг ${Math.round(lathStep * 1000)} мм`
+        : 'Финишное покрытие · профлист С-21, направление от карниза к коньку';
+
+  return <div className="roof-editor-shell">
+    <div className="roof-editor-layer-tabs">{ROOF_VIEW_LAYERS.map(([id, label, Icon]) => <button key={id} type="button" className={layer === id ? 'active' : ''} onClick={() => setLayer(id)}><Icon /><span>{label}</span></button>)}</div>
+    <div className="roof-editor-canvas-card">
+      <div className="roof-editor-canvas-head"><div><strong>{ROOF_VIEW_LAYERS.find((item) => item[0] === layer)?.[1]}</strong><span>{layerDescription}</span></div><em>{RAFTER_SYSTEM_LABELS[system] || system}</em></div>
+      <svg className="roof-editor-svg" viewBox={`0 0 ${svgW} ${svgH}`} role="img" aria-label="Схема кровли сверху">
+        <defs>
+          <pattern id="roofCoverPattern" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#6660a7"/><line x1="2" y1="0" x2="2" y2="12" stroke="#8c86c7" strokeWidth="1"/><line x1="7" y1="0" x2="7" y2="12" stroke="#514b8a" strokeWidth="1"/></pattern>
+        </defs>
+        <rect x="0" y="0" width={svgW} height={svgH} className="roof-editor-bg" />
+        <rect x={roofLeft} y={roofTop} width={roofWidth} height={roofHeight} className={`roof-editor-roof-surface layer-${layer}`} />
+        {gridLines}
+        <rect x={houseLeft} y={houseTop} width={houseWidth} height={houseHeight} className="roof-editor-house-footprint" />
+        <line x1={roofLeft} y1={ridgeY} x2={roofLeft + roofWidth} y2={ridgeY} className="roof-editor-ridge" />
+        {layer === 'structure' ? structureLines : null}
+        {layer === 'counter' ? <g className="roof-counter-layer">{rafterXs.map((x, index) => <line key={index} x1={x} y1={roofTop} x2={x} y2={roofTop + roofHeight} />)}</g> : null}
+        {layer === 'lath' ? <g className="roof-lath-layer">{rafterXs.map((x, index) => <line key={`ghost-${index}`} x1={x} y1={roofTop} x2={x} y2={roofTop + roofHeight} className="roof-rafter-ghost" />)}{lathYs.map((y, index) => <line key={`lath-${index}`} x1={roofLeft} y1={y} x2={roofLeft + roofWidth} y2={y} />)}</g> : null}
+        {layer === 'cover' ? <g className="roof-cover-layer"><rect x={roofLeft} y={roofTop} width={roofWidth} height={roofHeight} fill="url(#roofCoverPattern)" />{coverXs.map((x, index) => <line key={index} x1={x} y1={roofTop} x2={x} y2={roofTop + roofHeight} />)}</g> : null}
+        <line x1={roofLeft} y1={roofTop - 30} x2={roofLeft + roofWidth} y2={roofTop - 30} className="roof-editor-dim-line" />
+        <text x={roofLeft + roofWidth / 2} y={roofTop - 40} className="roof-editor-dim-text">длина кровли {formatNumber(calculation.roof.geometry?.roofLength || roofW)} м</text>
+        <line x1={roofLeft - 30} y1={roofTop} x2={roofLeft - 30} y2={roofTop + roofHeight} className="roof-editor-dim-line" />
+        <text x={roofLeft - 42} y={roofTop + roofHeight / 2} className="roof-editor-dim-text roof-editor-dim-vertical">пролёт {formatNumber(calculation.roof.geometry?.roofSpan || roofH)} м</text>
+        <text x={svgW - 28} y={36} className="roof-editor-title">Вид сверху</text>
+        <text x={svgW - 28} y={57} className="roof-editor-subtitle">схема без объёмной перспективы</text>
+      </svg>
+      <div className="roof-editor-legend"><span><i className="legend-house"/>контур дома</span><span><i className="legend-ridge"/>конёк</span><span><i className={`legend-layer legend-${layer}`}/>{ROOF_VIEW_LAYERS.find((item) => item[0] === layer)?.[1]}</span></div>
+    </div>
+
+    <Panel title="Конструктив кровли" description="Настройки как в основном калькуляторе, но схема сверху сразу показывает результат.">
+      <div className="form-grid four">
+        <SelectField label="Режим расчёта" value={roof.structureMode || 'auto'} onChange={(value) => setRoof('structureMode', value)} options={[{ value: 'auto', label: 'Автоматически по плану' }, { value: 'manual', label: 'Ручная настройка' }]} />
+        <SelectField label="Стропильная система" value={(roof.structureMode || 'auto') === 'auto' ? system : (roof.rafterSystem || 'hanging')} disabled={(roof.structureMode || 'auto') === 'auto'} onChange={(value) => setRoof('rafterSystem', value)} options={[{ value: 'hanging', label: 'Висячая · без внутренней опоры' }, { value: 'layered', label: 'Наслонная · с опорой' }, { value: 'truss', label: 'Стропильные фермы' }]} />
+        <NumberField label="Чистый шаг стропил / ферм" value={(roof.structureMode || 'auto') === 'auto' ? activeStep : roof.rafterStep} suffix="м" min={0.3} max={1.2} step={0.05} disabled={(roof.structureMode || 'auto') === 'auto'} onChange={(value) => setRoof('rafterStep', value)} />
+        <SelectField label="Стропильная доска" value={(roof.structureMode || 'auto') === 'auto' ? (structure.section || '50x150') : (roof.rafterSection || '50x150')} disabled={(roof.structureMode || 'auto') === 'auto'} onChange={(value) => setRoof('rafterSection', value)} options={[{ value: '50x150', label: '50×150 мм' }, { value: '50x200', label: '50×200 мм' }]} />
+        <SelectField label="Форма кровли" value={roof.shape || 'gable'} onChange={(value) => setRoof('shape', value)} options={[{ value: 'gable', label: 'Двускатная' }, { value: 'flat', label: 'Плоская' }]} />
+        <SelectField label="Тип кровли" value={roof.type || 'cold'} onChange={(value) => setRoof('type', value)} options={[{ value: 'cold', label: 'Холодная' }, { value: 'sip', label: 'Тёплая СИП' }, { value: 'combo', label: 'Комбинированная' }]} />
+        {roof.shape !== 'flat' ? <NumberField label="Высота конька" value={roof.ridgeHeight} suffix="м" min={0.1} step={0.1} onChange={(value) => setRoof('ridgeHeight', value)} /> : null}
+        <NumberField label="Шаг обрешётки" value={roof.lathStep ?? .35} suffix="м" min={.1} max={1.2} step={.05} onChange={(value) => setRoof('lathStep', value)} />
+        <NumberField label="Карнизный свес" value={roof.eaveOverhang ?? .5} suffix="м" min={0} max={2} step={.05} onChange={(value) => setRoof('eaveOverhang', value)} />
+        <NumberField label="Торцевой свес" value={roof.gableOverhang ?? .3} suffix="м" min={0} max={2} step={.05} onChange={(value) => setRoof('gableOverhang', value)} />
+        <NumberField label="Запас профлиста" value={roof.wastePercent ?? 10} suffix="%" min={0} max={50} step={1} onChange={(value) => setRoof('wastePercent', value)} />
+        <div className="readout roof-readout-box"><span>Схема несущей части</span><strong>{system === 'truss' ? `${pairCount} ферм` : `${pairCount} пар стропил`} · шаг {formatNumber(activeStep)} м</strong></div>
+      </div>
+    </Panel>
+
+    <Panel title="Слои кровельного пирога" description="Переключай слой сверху: геометрия дома сохраняется, меняется только показываемая система.">
+      <div className="roof-layer-summary-grid">
+        <article><span>Несущая система</span><strong>{RAFTER_SYSTEM_LABELS[system] || system}</strong><small>{structure.section || roof.rafterSection || '50×150'} · {pairCount} позиций</small></article>
+        <article><span>Контробрешётка</span><strong>по стропилам</strong><small>{structure.legCount || pairCount * 2} направлений по скатам</small></article>
+        <article><span>Обрешётка</span><strong>25×100 мм</strong><small>шаг {Math.round(lathStep * 1000)} мм · {calculation.roof.mainLathBoardCount || 0} досок × 6 м</small></article>
+        <article><span>Кровельное покрытие</span><strong>Профлист С-21</strong><small>{formatNumber(calculation.roof.geometry?.totalSlopeArea || 0)} м² · запас {roof.wastePercent ?? 10}%</small></article>
+      </div>
+    </Panel>
+
+    <div className="visual-facts roof-facts-grid">
+      <article><span>Площадь скатов</span><strong>{formatNumber(calculation.roof.geometry?.totalSlopeArea)} м²</strong></article>
+      <article><span>Стропильные ноги</span><strong>{structure.legCount || 0} шт.</strong></article>
+      <article><span>Стропильная доска</span><strong>{calculation.roof.rafterBoardCount || 0} шт. × 6 м</strong></article>
+      <article><span>Обрешётка</span><strong>{calculation.roof.mainLathBoardCount || 0} шт. × 6 м</strong></article>
+      <article><span>Мауэрлат</span><strong>{formatNumber(calculation.roof.mauerlatLength)} м.п.</strong></article>
+      <article><span>Коньковый прогон</span><strong>{formatNumber(calculation.roof.ridgeBeamLength)} м.п.</strong></article>
+    </div>
+  </div>;
+}
+
 function RoofControls({ project, calculation, setRoof }) {
   const roof = project.settings?.roof || {};
   return (
@@ -655,11 +804,11 @@ export default function VisualizationScreen() {
   return (
     <section className="visualization-screen engineering-visualization m771-visualization">
       <div className="mobile-screen-intro visualization-intro">
-        <span className="eyebrow">Инженерная визуализация · M7.7.1</span>
-        <h1>3D-вид, обзорный план и интерактивная кровля</h1>
+        <span className="eyebrow">Инженерная визуализация · M7.7.2</span>
+        <h1>3D-вид, обзорный план и редактор кровли</h1>
         <p>
           Основной упор теперь на главный красивый 3D-блок, отдельный план только для просмотра
-          и удобную вкладку кровли с настройками прямо внутри визуализации.
+          и отдельный редактор кровли сверху по слоям конструкции.
         </p>
       </div>
 
@@ -675,6 +824,8 @@ export default function VisualizationScreen() {
       <article className="visual-stage engineering-stage enhanced-stage">
         {mode === 'plan' ? (
           <PlanPreview project={project} metrics={metrics} />
+        ) : mode === 'roof' ? (
+          <RoofPlanEditor project={project} calculation={calculation} setRoof={setRoof} />
         ) : (
           <HouseModel
             project={project}
@@ -687,7 +838,7 @@ export default function VisualizationScreen() {
           />
         )}
 
-        {mode !== 'plan' ? (
+        {mode === '3d' ? (
           <div className="visual-orbit-controls">
             <button type="button" onClick={() => setQuarter((current) => (current + 3) % 4)} title="Повернуть влево">
               <RotateCcw />
@@ -699,7 +850,7 @@ export default function VisualizationScreen() {
           </div>
         ) : null}
 
-        {mode !== 'plan' ? (
+        {mode === '3d' ? (
           <div className="visual-stage-actions">
             <button type="button" className={cutaway ? 'active' : ''} onClick={() => setCutaway((current) => !current)}>
               <Eye />
@@ -718,7 +869,7 @@ export default function VisualizationScreen() {
           </div>
         ) : null}
 
-        {showLayers && mode !== 'plan' ? (
+        {showLayers && mode === '3d' ? (
           <div className="visual-layer-panel">
             <strong>Слои модели</strong>
             {[
@@ -738,7 +889,7 @@ export default function VisualizationScreen() {
 
         <div className="visual-stage-badge">
           <RotateCcw />
-          <span>{mode === 'plan' ? 'Только просмотр' : 'Связано с основным планом'}</span>
+          <span>{mode === 'plan' ? 'Только просмотр' : mode === 'roof' ? 'Схема кровли сверху' : 'Связано с основным планом'}</span>
         </div>
       </article>
 
@@ -763,7 +914,6 @@ export default function VisualizationScreen() {
       ) : null}
 
       {mode === 'plan' ? <PlanReadout project={project} metrics={metrics} /> : null}
-      {mode === 'roof' ? <RoofControls project={project} calculation={calculation} setRoof={setRoof} /> : null}
     </section>
   );
 }

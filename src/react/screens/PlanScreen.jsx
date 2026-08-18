@@ -19,7 +19,7 @@ import {
 } from '../planner/geometry.js';
 
 const VIEW = { width: 1100, height: 760 };
-const MOBILE_RELEASE_LABEL = 'M7.7.1';
+const MOBILE_RELEASE_LABEL = 'M7.7.2';
 const SKETCHES_KEY = 'eft-react-plan-sketches-v47';
 const DRAW_TOOLS = new Set(['room', 'wall', 'dimension', 'pileRow', 'bindingLine', 'terrace', 'porch']);
 const TOOLS = [
