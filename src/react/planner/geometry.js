@@ -301,3 +301,29 @@ export function lineEndpoints(segment) {
   if (segment.axis === 'v') return [{ x: segment.fixed, y: segment.start }, { x: segment.fixed, y: segment.end }];
   return [segment.a, segment.b];
 }
+
+
+export function scalePlanToHouse(plan, nextWidth, nextHeight) {
+  const oldW = Math.max(0.001, Number(plan?.house?.w) || 0.001);
+  const oldH = Math.max(0.001, Number(plan?.house?.h) || 0.001);
+  const newW = Math.max(3, Number(nextWidth) || oldW);
+  const newH = Math.max(3, Number(nextHeight) || oldH);
+  const sx = newW / oldW; const sy = newH / oldH;
+  const px = (x) => roundCoord((Number(x) || 0) * sx);
+  const py = (y) => roundCoord((Number(y) || 0) * sy);
+
+  (plan.rooms || []).forEach((room) => {
+    room.points = roomPoints(room).map((point) => ({ x: px(point.x), y: py(point.y) }));
+    Object.assign(room, boundsOf(room.points));
+  });
+  (plan.walls || []).forEach((item) => { item.x1=px(item.x1); item.x2=px(item.x2); item.y1=py(item.y1); item.y2=py(item.y2); });
+  (plan.dimensions || []).forEach((item) => { item.x1=px(item.x1); item.x2=px(item.x2); item.y1=py(item.y1); item.y2=py(item.y2); });
+  (plan.pileRows || []).forEach((item) => { item.x1=px(item.x1); item.x2=px(item.x2); item.y1=py(item.y1); item.y2=py(item.y2); });
+  (plan.bindingLines || []).forEach((item) => { item.x1=px(item.x1); item.x2=px(item.x2); item.y1=py(item.y1); item.y2=py(item.y2); });
+  (plan.piles || []).forEach((item) => { item.x=px(item.x); item.y=py(item.y); });
+  (plan.wallGaps || []).forEach((item) => { item.x=px(item.x); item.y=py(item.y); });
+  (plan.openings || []).forEach((item) => { item.x=px(item.x); item.y=py(item.y); });
+  (plan.platforms || []).forEach((item) => { item.x=px(item.x); item.y=py(item.y); item.w=roundCoord((Number(item.w)||0)*sx); item.h=roundCoord((Number(item.h)||0)*sy); });
+  plan.house.w = roundCoord(newW); plan.house.h = roundCoord(newH);
+  return plan;
+}

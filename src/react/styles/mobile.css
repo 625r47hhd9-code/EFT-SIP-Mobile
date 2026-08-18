@@ -693,3 +693,14 @@ button, input, select, textarea { font: inherit; }
     box-shadow:0 2px 8px rgba(20,24,30,.06);
   }
 }
+
+
+/* M7.6.0 controls */
+@media(max-width:720px){
+  .mobile-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:9px}
+  .mobile-choice-grid label{display:grid;gap:5px;font-size:9px;font-weight:800;color:#777483}
+  .mobile-choice-grid select{width:100%;height:42px;border:1px solid rgba(80,77,95,.14);border-radius:12px;background:#fafafd;padding:0 9px;font-size:11px;font-weight:800;color:#292735}
+  .mobile-auto-pile-setup{z-index:210!important}
+  .auto-pile-preview{margin:10px 0;padding:12px;border-radius:14px;background:#f2f8ee;display:grid;gap:3px;text-align:center}
+  .auto-pile-preview strong{font-size:22px;color:#4c852b}.auto-pile-preview span{font-size:9px;color:#778072}
+}

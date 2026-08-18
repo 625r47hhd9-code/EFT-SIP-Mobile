@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { calculatePlanMetrics, chooseDimensionSides, polygonArea } from '../../calculations/plan-metrics.js';
 import { calculateTerraceRoof, normalizeTerracePlatform } from '../../calculations/terrace-model.js';
-import { bindingLinesFromPileRows, calculateFoundation, generateAutoBindingLines, generateAutoPileRows } from '../calculations/foundation-model.js';
+import { bindingLinesFromPileRows, calculateFoundation, generateAutoBindingLines, generateAutoPileRows, generatePileGrid } from '../calculations/foundation-model.js';
 import { Field, NumberField, ScreenHeader, SelectField, Stat, Toggle } from '../components/ui.jsx';
 import { createCompactPlan, createDefaultPlan, createEmptyPlan } from '../state/project-model.js';
 import { useProject } from '../state/ProjectContext.jsx';
@@ -15,11 +15,11 @@ import { applyPlanTransfer, downloadPlanTransfer, sharePlanTransfer } from '../s
 import {
   allOpeningSegments, boundsOf, collectSnapAxes, dimensionOutsideHouse, lineEndpoints, movePoints, nearestSegment,
   pileRowAlignment, planIssues, projectOpeningToWall, rectanglePoints, roomPoints, roundCoord, shouldClosePolygon,
-  snapPoint, snapPointDetails, unifiedWallSegments, withRoomBounds
+  snapPoint, snapPointDetails, unifiedWallSegments, withRoomBounds, scalePlanToHouse
 } from '../planner/geometry.js';
 
 const VIEW = { width: 1100, height: 760 };
-const MOBILE_RELEASE_LABEL = 'M7.5.6';
+const MOBILE_RELEASE_LABEL = 'M7.6.0';
 const SKETCHES_KEY = 'eft-react-plan-sketches-v47';
 const DRAW_TOOLS = new Set(['room', 'wall', 'dimension', 'pileRow', 'bindingLine', 'terrace', 'porch']);
 const TOOLS = [
@@ -288,7 +288,7 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     }
     const profiles = {
       room: { tolerance: .34, pointTolerance: .38, grid: .1 },
-      polygon: { tolerance: .24, pointTolerance: .30, grid: .1 },
+      polygon: { tolerance: .42, pointTolerance: .58, grid: .1 },
       wall: { tolerance: .26, pointTolerance: .32, grid: .1 },
       pileRow: { tolerance: .05, pointTolerance: .08, grid: false },
       bindingLine: { tolerance: .06, pointTolerance: .10, grid: false },
@@ -366,8 +366,9 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
     const point = toPlan(event);
     if (tool === 'select') { setSelected(null); onSelected?.(null); panGestureRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, start: { ...(viewportPan || { x: 0, y: 0 }) }, moved: false }; return; }
     if (tool === 'polygon') {
-      if (shouldClosePolygon(polygonDraft, point)) { finishPolygon(); return; }
-      setPolygonDraft((current) => [...current, point]); return;
+      const polygonPoint = magneticPoint(event, 'polygon').point;
+      if (shouldClosePolygon(polygonDraft, polygonPoint)) { finishPolygon(); return; }
+      setPolygonDraft((current) => [...current, polygonPoint]); return;
     }
     if (tool === 'window' || tool === 'door' || tool === 'garage' || tool === 'gap') { addAt(rawPoint, tool); return; }
     if (tool === 'pile') { addAt(point, tool); return; }
@@ -601,7 +602,8 @@ const MOBILE_TOOLS = [
 const roundDisplay = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 function MobileStepper({ label, value, onMinus, onPlus, suffix = 'м' }) {
-  return <div className="mobile-plan-stepper"><span>{label}</span><div><button type="button" onClick={onMinus} aria-label={`Уменьшить ${label} на 10 см`}><Minus /></button><strong>{roundDisplay(value).toFixed(2)} {suffix}</strong><button type="button" onClick={onPlus} aria-label={`Увеличить ${label} на 10 см`}><Plus /></button></div></div>;
+  const display = suffix === 'шт' ? Math.round(Number(value) || 0) : roundDisplay(value).toFixed(2);
+  return <div className="mobile-plan-stepper"><span>{label}</span><div><button type="button" onClick={onMinus} aria-label={`Уменьшить ${label}`}><Minus /></button><strong>{display} {suffix}</strong><button type="button" onClick={onPlus} aria-label={`Увеличить ${label}`}><Plus /></button></div></div>;
 }
 
 function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metrics, foundation, sheetMode, setSheetMode }) {
@@ -691,14 +693,15 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metr
     title = opening.type === 'window' ? 'Окно' : opening.doorType === 'interior' ? 'Межкомнатная дверь' : opening.doorType === 'garage' ? 'Ворота' : 'Входная дверь';
     subtitle = `${formatNumber(opening.width)} × ${formatNumber(opening.height)} м`;
     controls = <><MobileStepper label="Ширина" value={opening.width} onMinus={() => update('openings', (i) => { i.width = Math.max(.3, roundCoord(i.width-step)); })} onPlus={() => update('openings', (i) => { i.width = roundCoord(i.width+step); })} /><MobileStepper label="Высота" value={opening.height} onMinus={() => update('openings', (i) => { i.height = Math.max(.5, roundCoord(i.height-step)); })} onPlus={() => update('openings', (i) => { i.height = roundCoord(i.height+step); })} /></>;
-    detail = <div className="mobile-object-facts"><span>Стена <b>{opening.outer ? 'наружная' : 'внутренняя'}</b></span><span>Положение <b>{formatNumber(opening.x)} / {formatNumber(opening.y)} м</b></span></div>;
+    detail = opening.type === 'door' ? <div className="mobile-choice-grid"><label><span>Петли</span><select value={opening.hinge || 'right'} onChange={(e)=>update('openings',(i)=>{i.hinge=e.target.value})}><option value="left">Слева</option><option value="right">Справа</option></select></label><label><span>Открывание</span><select value={opening.swing || 'in'} onChange={(e)=>update('openings',(i)=>{i.swing=e.target.value})}><option value="in">Внутрь</option><option value="out">Наружу</option></select></label></div> : null;
   } else if (platform) {
     title = platform.kind === 'porch' ? 'Крыльцо' : 'Терраса'; subtitle = `${formatNumber(platform.w*platform.h)} м² · ${formatNumber(platform.w)} × ${formatNumber(platform.h)} м`;
     controls = <><MobileStepper label="Ширина" value={platform.w} onMinus={() => update('platforms', (i)=>{i.w=Math.max(.5,roundCoord(i.w-step));})} onPlus={() => update('platforms',(i)=>{i.w=roundCoord(i.w+step);})}/><MobileStepper label="Длина" value={platform.h} onMinus={() => update('platforms',(i)=>{i.h=Math.max(.5,roundCoord(i.h-step));})} onPlus={() => update('platforms',(i)=>{i.h=roundCoord(i.h+step);})}/></>;
+    detail = <div className="mobile-choice-grid"><label><span>Сторона ступеней</span><select value={platform.stairSide || 'bottom'} onChange={(e)=>update('platforms',(i)=>{i.stairSide=e.target.value})}><option value="top">Сверху</option><option value="right">Справа</option><option value="bottom">Снизу</option><option value="left">Слева</option></select></label><label><span>Ступеней</span><select value={platform.steps ?? 3} onChange={(e)=>update('platforms',(i)=>{i.steps=Math.max(0,Number(e.target.value)||0)})}>{[0,1,2,3,4,5].map(v=><option key={v} value={v}>{v}</option>)}</select></label></div>;
   } else if (wall || binding || dimension || pileRow) {
     const item = wall || binding || dimension || pileRow; const key = wall ? 'walls' : binding ? 'bindingLines' : dimension ? 'dimensions' : 'pileRows';
-    const length = Math.hypot(item.x2-item.x1,item.y2-item.y1); title = wall ? 'Перегородка' : binding ? 'Обвязка' : dimension ? 'Размер' : 'Ряд свай'; subtitle = `${formatNumber(length)} м`;
-    controls = <MobileStepper label="Длина" value={length} onMinus={() => resizeLine(key,-step)} onPlus={() => resizeLine(key,step)} />;
+    const length = Math.hypot(item.x2-item.x1,item.y2-item.y1); title = wall ? 'Перегородка' : binding ? 'Обвязка' : dimension ? 'Размер' : 'Ряд свай'; subtitle = pileRow ? `${Math.round(pileRow.count || 2)} свай · ${formatNumber(length)} м` : `${formatNumber(length)} м`;
+    controls = pileRow ? <><MobileStepper label="Количество свай" value={pileRow.count || 2} suffix="шт" onMinus={()=>update('pileRows',(i)=>{i.count=Math.max(2,Math.round(i.count||2)-1)})} onPlus={()=>update('pileRows',(i)=>{i.count=Math.min(40,Math.round(i.count||2)+1)})}/><MobileStepper label="Длина ряда" value={length} onMinus={() => resizeLine(key,-step)} onPlus={() => resizeLine(key,step)} /></> : <MobileStepper label="Длина" value={length} onMinus={() => resizeLine(key,-step)} onPlus={() => resizeLine(key,step)} />;
   } else if (gap) { title='Разрыв стены'; subtitle=`${formatNumber(gap.width)} м`; controls=<MobileStepper label="Ширина" value={gap.width} onMinus={()=>update('wallGaps',(i)=>{i.width=Math.max(.1,roundCoord(i.width-step));})} onPlus={()=>update('wallGaps',(i)=>{i.width=roundCoord(i.width+step);})}/>; }
   else if (pile) { title='Свая'; subtitle=`X ${formatNumber(pile.x)} · Y ${formatNumber(pile.y)} м`; }
 
@@ -731,7 +734,7 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metr
         <span className="mobile-sheet-grabber"/><div className="mobile-sheet-peek-copy"><strong>{title}</strong><small>{subtitle}</small></div>
       </button>
       {sheetMode !== 'peek' ? <div className="mobile-sheet-body">
-        {selected ? <><header><div><strong>{title}</strong><small>{subtitle}</small></div><button type="button" onClick={()=>{setSelected(null);setSheetMode('peek')}}><X/></button></header><div className="mobile-stepper-grid">{controls}</div>{detail}<div className="mobile-selection-actions"><button className="mobile-delete-selection" type="button" onClick={deleteSelected}><Trash2/>Удалить</button></div></> : <><header><div><strong>Параметры дома</strong><small>Контроль плана</small></div></header>{homeFacts}</>}
+        {selected ? <><header><div><strong>{title}</strong><small>{subtitle}</small></div><button type="button" onClick={()=>{setSelected(null);setSheetMode('peek')}}><X/></button></header><div className="mobile-stepper-grid">{controls}</div>{detail}<div className="mobile-selection-actions"><button className="mobile-delete-selection" type="button" onClick={deleteSelected}><Trash2/>Удалить</button></div></> : <><header><div><strong>Параметры дома</strong><small>Размер меняет весь план пропорционально</small></div></header><div className="mobile-stepper-grid"><MobileStepper label="Ширина дома" value={plan.house.w} onMinus={()=>commitPlan((next)=>scalePlanToHouse(next,Math.max(3,next.house.w-.1),next.house.h))} onPlus={()=>commitPlan((next)=>scalePlanToHouse(next,next.house.w+.1,next.house.h))}/><MobileStepper label="Длина дома" value={plan.house.h} onMinus={()=>commitPlan((next)=>scalePlanToHouse(next,next.house.w,Math.max(3,next.house.h-.1)))} onPlus={()=>commitPlan((next)=>scalePlanToHouse(next,next.house.w,next.house.h+.1))}/></div>{homeFacts}</>}
         {sheetMode === 'full' ? <div className="mobile-sheet-full">
           {selected ? <><div className="mobile-full-section-title">Подробные параметры</div><div className="mobile-selection-inspector"><Inspector plan={plan} selected={selected} commitPlan={commitPlan} issues={[]} setSelected={setSelected}/></div></> :
           <><div className="mobile-full-section-title">Геометрия проекта</div><div className="mobile-house-summary-grid extended"><span>Высота стен <b>{formatNumber(plan.wallHeight)} м</b></span><span>Наружная стена <b>{Math.round((plan.wallThickness||0)*1000)} мм</b></span><span>Перегородка <b>{Math.round((plan.partitionThickness||0)*1000)} мм</b></span><span>Размеры <b>{plan.showDimensions!==false?'вкл':'выкл'}</b></span><span>Сваи <b>{plan.showPiles!==false?'вкл':'выкл'}</b></span><span>Обвязка <b>{plan.showBinding!==false?'вкл':'выкл'}</b></span></div></>}
@@ -755,6 +758,9 @@ export default function PlanScreen({ onNavigate }) {
   const [viewportZoom, setViewportZoom] = useState(() => Math.max(35, Math.min(2000, Number(project?.plan?.zoom) || 100)));
   const [viewportPan, setViewportPan] = useState({ x: 0, y: 0 });
   const [bindingSetupOpen, setBindingSetupOpen] = useState(false);
+  const [autoPileSetupOpen, setAutoPileSetupOpen] = useState(false);
+  const [autoPileColumns, setAutoPileColumns] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoGridColumns) || 5));
+  const [autoPileRows, setAutoPileRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoGridRows) || 6));
   const [bindingVerticalRows, setBindingVerticalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingVerticalRows) || 4));
   const [bindingHorizontalRows, setBindingHorizontalRows] = useState(() => Math.max(2, Number(project?.settings?.piles?.autoBindingHorizontalRows) || 5));
   const [gridVisible, setGridVisible] = useState(true);
@@ -822,11 +828,16 @@ export default function PlanScreen({ onNavigate }) {
     }
   };
   const autoPiles = () => {
-    commitPlan((next) => {
-      next.pileRows = generateAutoPileRows(next, project.settings.piles.spacing);
-      next.showPiles = true; next.showBinding = true;
+    const columns = Math.max(2, Math.min(24, Math.round(Number(autoPileColumns) || 5)));
+    const rows = Math.max(2, Math.min(24, Math.round(Number(autoPileRows) || 6)));
+    commit((next) => {
+      next.settings.piles.autoGridColumns = columns; next.settings.piles.autoGridRows = rows;
+      next.plan.pileRows = generatePileGrid(next.plan, columns, rows);
+      next.plan.bindingLines = generateAutoBindingLines(next.plan, columns, rows);
+      next.plan.showPiles = true; next.plan.showBinding = true;
+      return next;
     });
-    setSelected(null); setTool('select');
+    setAutoPileSetupOpen(false); setSelected(null); setTool('select');
   };
   const autoBinding = () => {
     const vertical = Math.max(2, Math.min(24, Math.round(Number(bindingVerticalRows) || 4)));
@@ -857,7 +868,7 @@ export default function PlanScreen({ onNavigate }) {
     <div className="mobile-release-badge" aria-label={`Версия ${MOBILE_RELEASE_LABEL}`}>{MOBILE_RELEASE_LABEL}</div>
     <div className="mobile-plan-top-controls">
       <button className="mobile-float-button" type="button" onClick={() => onNavigate?.('visualization')} aria-label="Выйти из редактора"><ChevronLeft /></button>
-      <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><label className="mobile-template-picker"><span>Шаблон</span><select value={sketchId} onChange={(event) => setSketchId(event.target.value)}>{sketches.map((sketch) => <option key={sketch.id} value={sketch.id}>{sketch.name}</option>)}</select></label><button type="button" onClick={loadSketch}><PanelsTopLeft />Загрузить шаблон</button><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoPiles}><Sparkles />Автосваи</button><button type="button" onClick={() => setBindingSetupOpen(true)}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
+      <details className="mobile-project-menu"><summary className="mobile-project-chip"><strong>Дом № {project.meta?.projectNum || '0001'}</strong><ChevronDown /></summary><div className="mobile-project-actions"><label className="mobile-template-picker"><span>Шаблон</span><select value={sketchId} onChange={(event) => setSketchId(event.target.value)}>{sketches.map((sketch) => <option key={sketch.id} value={sketch.id}>{sketch.name}</option>)}</select></label><button type="button" onClick={loadSketch}><PanelsTopLeft />Загрузить шаблон</button><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить файл</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть файл</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={() => setAutoPileSetupOpen(true)}><Sparkles />Автосваи</button><button type="button" onClick={() => setBindingSetupOpen(true)}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
       <div className="mobile-zoom-chip"><button type="button" onClick={() => setViewportZoom((z) => Math.max(35,z-25))}><ZoomOut /></button><strong onClick={() => { setViewportZoom(100); setViewportPan({x:0,y:0}); }} title="Сбросить масштаб">{viewportZoom}%</strong><button type="button" onClick={() => setViewportZoom((z) => Math.min(2000,z+25))}><ZoomIn /></button></div>
       <button className={`mobile-grid-chip ${gridVisible ? 'active' : ''}`} type="button" onClick={() => setGridVisible((v) => !v)}><Grid3X3 /><span>Сетка</span></button>
       <div className="mobile-history-chip"><button type="button" onClick={undo} disabled={!canUndo}><Undo2 /></button><button type="button" onClick={redo} disabled={!canRedo}><Redo2 /></button></div>
@@ -865,6 +876,7 @@ export default function PlanScreen({ onNavigate }) {
     </div>
     <aside className="mobile-plan-tools"><div className="mobile-select-fixed"><button type="button" className={tool==='select'?'active':''} onClick={() => selectTool('select')}><MousePointer2 /><span>Выбор</span></button></div><div className="mobile-tools-scroll">{MOBILE_TOOLS.map(([id,label,Icon]) => <button key={id} type="button" className={tool===id?'active':''} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}</div></aside>
     <div className="mobile-plan-stage"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} viewportZoom={viewportZoom} onViewportZoom={setViewportZoom} viewportPan={viewportPan} onViewportPan={setViewportPan} onCreated={handleCreated} onSelected={handleSelected} /><div className="mobile-pinch-tip">{toolHint}</div></div>
+    {autoPileSetupOpen ? <section className="mobile-binding-setup mobile-auto-pile-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автосваи</strong><small>Сетка свай + автоматическая обвязка</small></div><button type="button" onClick={() => setAutoPileSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Свай по ширине" value={autoPileColumns} suffix="шт" onMinus={() => setAutoPileColumns((v)=>Math.max(2,Math.round(v)-1))} onPlus={() => setAutoPileColumns((v)=>Math.min(24,Math.round(v)+1))}/><MobileStepper label="Свай по длине" value={autoPileRows} suffix="шт" onMinus={() => setAutoPileRows((v)=>Math.max(2,Math.round(v)-1))} onPlus={() => setAutoPileRows((v)=>Math.min(24,Math.round(v)+1))}/></div><div className="auto-pile-preview"><strong>{autoPileColumns} × {autoPileRows}</strong><span>{autoPileColumns*autoPileRows} свай до объединения совпадающих точек</span></div><button className="button primary mobile-binding-apply" type="button" onClick={autoPiles}><Sparkles />Построить сваи и обвязку</button><p>Сетка равномерно распределяется по всему дому: крайние сваи всегда лежат на периметре.</p></section> : null}
     {bindingSetupOpen ? <section className="mobile-binding-setup"><div className="mobile-sheet-grabber"/><header><div><strong>Автообвязка</strong><small>2 ряда = только крайние линии</small></div><button type="button" onClick={() => setBindingSetupOpen(false)}><X /></button></header><div className="binding-count-grid"><MobileStepper label="Вертикальных рядов" value={bindingVerticalRows} suffix="шт" onMinus={() => setBindingVerticalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingVerticalRows((v) => Math.min(24, Math.round(v)+1))} /><MobileStepper label="Горизонтальных рядов" value={bindingHorizontalRows} suffix="шт" onMinus={() => setBindingHorizontalRows((v) => Math.max(2, Math.round(v)-1))} onPlus={() => setBindingHorizontalRows((v) => Math.min(24, Math.round(v)+1))} /></div><button className="button primary mobile-binding-apply" type="button" onClick={autoBinding}><Sparkles />Построить обвязку</button><p>Ряды распределяются равномерно. После построения любую линию можно поправить вручную.</p></section> : null}
     <MobileSelectionAdjuster plan={plan} selected={selected} commitPlan={commitPlan} setSelected={setSelected} metrics={metrics} foundation={foundation} sheetMode={sheetMode} setSheetMode={setSheetMode} />
   </div>;
@@ -872,11 +884,11 @@ export default function PlanScreen({ onNavigate }) {
     <div className="mobile-plan-commandbar">
       <button type="button" onClick={undo} disabled={!canUndo}><Undo2 /><span>Назад</span></button>
       <button type="button" onClick={redo} disabled={!canRedo}><Redo2 /><span>Вперёд</span></button>
-      <button type="button" onClick={autoPiles}><Sparkles /><span>Автосваи</span></button>
+      <button type="button" onClick={() => setAutoPileSetupOpen(true)}><Sparkles /><span>Автосваи</span></button>
       <details><summary><MoreHorizontal /><span>Ещё</span></summary><div className="mobile-plan-more"><button type="button" onClick={newPlan}><Plus />Новый план</button><button type="button" onClick={savePlanFile}><Download />Сохранить план</button><button type="button" onClick={() => planFileRef.current?.click()}><Upload />Открыть план</button><button type="button" onClick={sharePlanFile}><Share2 />Поделиться</button><button type="button" onClick={autoBinding}><Layers3 />Автообвязка</button><button type="button" onClick={saveSketch}><Save />В эскизы</button></div></details>
     </div>
     <div className="plan-transfer-status"><Share2 /><span>{transferStatus}</span><small>Файл плана не содержит прайс-лист, данные заказчика и ручные правки сметы.</small></div>
-    <div className="plan-status-bar"><div className="plan-house-fields"><NumberField label="Габарит X" value={plan.house.w} suffix="м" min={3} onChange={(value) => commitPlan((next) => { next.house.w = value; })} /><NumberField label="Габарит Y" value={plan.house.h} suffix="м" min={3} onChange={(value) => commitPlan((next) => { next.house.h = value; })} /><NumberField label="Высота стен" value={plan.wallHeight} suffix="м" min={2} onChange={(value) => commitPlan((next) => { next.wallHeight = value; })} /></div><div className="plan-view-switches"><Toggle label="Сваи" checked={plan.showPiles !== false} onChange={(value) => commitPlan((next) => { next.showPiles = value; })} /><Toggle label="Обвязка" checked={plan.showBinding !== false} onChange={(value) => commitPlan((next) => { next.showBinding = value; })} /><Toggle label="Размеры" checked={plan.showDimensions !== false} onChange={(value) => commitPlan((next) => { next.showDimensions = value; })} /></div><div className="zoom-controls"><button className="icon-button" onClick={() => commitPlan((next) => { next.zoom = Math.max(65, (next.zoom || 100) - 10); })}><ZoomOut /></button><strong>{plan.zoom || 100}%</strong><button className="icon-button" onClick={() => commitPlan((next) => { next.zoom = Math.min(180, (next.zoom || 100) + 10); })}><ZoomIn /></button></div></div>
+    <div className="plan-status-bar"><div className="plan-house-fields"><NumberField label="Габарит X" value={plan.house.w} suffix="м" min={3} onChange={(value) => commitPlan((next) => { scalePlanToHouse(next, value, next.house.h); })} /><NumberField label="Габарит Y" value={plan.house.h} suffix="м" min={3} onChange={(value) => commitPlan((next) => { scalePlanToHouse(next, next.house.w, value); })} /><NumberField label="Высота стен" value={plan.wallHeight} suffix="м" min={2} onChange={(value) => commitPlan((next) => { next.wallHeight = value; })} /></div><div className="plan-view-switches"><Toggle label="Сваи" checked={plan.showPiles !== false} onChange={(value) => commitPlan((next) => { next.showPiles = value; })} /><Toggle label="Обвязка" checked={plan.showBinding !== false} onChange={(value) => commitPlan((next) => { next.showBinding = value; })} /><Toggle label="Размеры" checked={plan.showDimensions !== false} onChange={(value) => commitPlan((next) => { next.showDimensions = value; })} /></div><div className="zoom-controls"><button className="icon-button" onClick={() => commitPlan((next) => { next.zoom = Math.max(65, (next.zoom || 100) - 10); })}><ZoomOut /></button><strong>{plan.zoom || 100}%</strong><button className="icon-button" onClick={() => commitPlan((next) => { next.zoom = Math.min(180, (next.zoom || 100) + 10); })}><ZoomIn /></button></div></div>
     <div className="planner-shell"><aside className="planner-tools">{TOOLS.map(([id, label, Icon]) => <button key={id} className={tool === id ? 'active' : ''} title={label} onClick={() => selectTool(id)}><Icon /><span>{label}</span></button>)}{tool === 'polygon' && polygonDraft.length ? <div className="polygon-actions"><button className="active" onClick={finishPolygon} disabled={polygonDraft.length < 3}><Save /><span>Замкнуть</span></button><button onClick={() => setPolygonDraft([])}><X /><span>Сброс</span></button></div> : null}</aside><div className="planner-canvas"><PlanCanvas plan={plan} tool={tool} selected={selected} setSelected={setSelected} commitPlan={commitPlan} polygonDraft={polygonDraft} setPolygonDraft={setPolygonDraft} finishPolygon={finishPolygon} issues={issues} /><div className="planner-hint">{toolHint}</div></div><aside className="planner-inspector"><Inspector plan={plan} selected={selected} setSelected={setSelected} commitPlan={commitPlan} issues={issues} /></aside></div>
     <div className="stats-row planner-stats"><Stat label="Пол всего дома" value={`${formatNumber(metrics.floorArea)} м²`} /><Stat label="Перегородки без задвоений" value={`${formatNumber(metrics.partitionLength)} м`} /><Stat label="Наружные стены" value={`${formatNumber(metrics.exteriorWallNetArea)} м²`} /><Stat label="Сваи" value={`${foundation.totalPiles} шт`} /><Stat label="Обвязка" value={`${formatNumber(foundation.bindingLength)} м · ${foundation.boardCount} досок × 6 м`} /><Stat label="Проверка" value={issues.length ? `${issues.length} ошибок` : 'Стыковка верна'} tone={issues.length ? 'danger' : ''} /></div>
   </div></>;

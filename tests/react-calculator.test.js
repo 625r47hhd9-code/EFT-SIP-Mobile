@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateProject } from '../src/react/calculations/estimate-engine.js';
 import { buildCommercialScope } from '../src/react/calculations/commercial-scope.js';
-import { bindingLinesFromPileRows, calculateFoundation, generateAutoPileRows } from '../src/react/calculations/foundation-model.js';
+import { bindingLinesFromPileRows, calculateFoundation, generateAutoPileRows, generatePileGrid, generateAutoBindingLines } from '../src/react/calculations/foundation-model.js';
 import { createDefaultProject, createProjectWithCurrentPrices, migrateProject } from '../src/react/state/project-model.js';
 import { verifyPricePasscode } from '../src/react/security/price-access.js';
 
@@ -615,4 +615,18 @@ test('pile rows share one pile at corners and crossing nodes', () => {
   assert.equal(foundation.totalPiles, 6, 'the crossing and shared corner are each counted once');
   assert.equal(foundation.points.filter((point) => point.x === 5 && point.y === 4).length, 1);
   assert.equal(foundation.points.filter((point) => point.x === 10 && point.y === 4).length, 1);
+});
+
+
+test('automatic pile grid respects requested width/length counts and matching binding grid', () => {
+  const project = createDefaultProject();
+  project.plan.house = { w: 10, h: 8 };
+  project.plan.platforms = []; project.plan.piles = [];
+  project.plan.pileRows = generatePileGrid(project.plan, 4, 3);
+  project.plan.bindingLines = generateAutoBindingLines(project.plan, 4, 3);
+  const foundation = calculateFoundation(project.plan, project.settings.piles);
+  assert.equal(project.plan.pileRows.length, 3);
+  assert.ok(project.plan.pileRows.every((row) => row.count === 4));
+  assert.equal(foundation.housePiles, 12);
+  assert.equal(project.plan.bindingLines.length, 7);
 });

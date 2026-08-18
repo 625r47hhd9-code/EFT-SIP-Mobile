@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   allOpeningSegments, boundsOf, collectSnapAxes, dimensionOutsideHouse, movePoints, nearestSegment,
-  pileRowAlignment, planIssues, projectOpeningToWall, rectanglePoints, shouldClosePolygon, snapPoint, snapPointDetails, unifiedWallSegments
+  pileRowAlignment, planIssues, projectOpeningToWall, rectanglePoints, shouldClosePolygon, snapPoint, snapPointDetails, unifiedWallSegments, scalePlanToHouse
 } from '../src/react/planner/geometry.js';
 
 const room = (id, name, x1, y1, x2, y2) => ({
@@ -133,4 +133,22 @@ test('snap resolver can disable grid rounding for live finger tools', () => {
   assert.equal(free.point.x, 1.237);
   assert.equal(free.point.y, 4.684);
   assert.equal(free.snap, null);
+});
+
+
+test('scalePlanToHouse proportionally pulls rooms, piles, platforms and openings with new house dimensions', () => {
+  const plan = {
+    house:{w:10,h:8}, wallThickness:.174, rooms:[room('r','R',1,1,5,4)], walls:[], dimensions:[],
+    pileRows:[{id:'row',x1:0,y1:4,x2:10,y2:4,count:5}], bindingLines:[{id:'b',x1:5,y1:0,x2:5,y2:8}],
+    piles:[{id:'p',x:2,y:2}], wallGaps:[], openings:[{id:'o',x:10,y:2,width:.9,height:2}],
+    platforms:[{id:'t',x:0,y:8,w:10,h:2}]
+  };
+  scalePlanToHouse(plan, 20, 12);
+  assert.deepEqual(plan.house,{w:20,h:12});
+  assert.deepEqual(boundsOf(plan.rooms[0].points),{x:2,y:1.5,x2:10,y2:6,w:8,h:4.5});
+  assert.equal(plan.pileRows[0].x2,20); assert.equal(plan.pileRows[0].y1,6);
+  assert.equal(plan.piles[0].x,4); assert.equal(plan.piles[0].y,3);
+  assert.equal(plan.openings[0].x,20); assert.equal(plan.openings[0].y,3);
+  assert.equal(plan.openings[0].width,.9, 'opening physical width stays unchanged');
+  assert.equal(plan.platforms[0].w,20); assert.equal(plan.platforms[0].h,3);
 });

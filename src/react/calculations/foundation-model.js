@@ -79,6 +79,24 @@ export function generateAutoBindingLines(plan, verticalRows = 4, horizontalRows 
   return lines;
 }
 
+
+export function generatePileGrid(plan, columns = 5, rows = 6) {
+  const w = Math.max(0.5, Number(plan?.house?.w) || 0.5);
+  const h = Math.max(0.5, Number(plan?.house?.h) || 0.5);
+  const xCount = Math.max(2, Math.min(24, Math.round(Number(columns) || 5)));
+  const yCount = Math.max(2, Math.min(24, Math.round(Number(rows) || 6)));
+  const result = [];
+  for (let row = 0; row < yCount; row += 1) {
+    const y = yCount === 1 ? 0 : h * row / (yCount - 1);
+    result.push({
+      id: `grid-row-${row + 1}`,
+      name: `Сетка · ряд ${row + 1}`,
+      x1: 0, y1: round(y, 3), x2: round(w, 3), y2: round(y, 3),
+      count: xCount, group: 'house', auto: true, grid: true
+    });
+  }
+  return result;
+}
 export function generateAutoPileRows(plan, spacing = 2.5) {
   const safeSpacing = Math.max(0.5, Number(spacing) || 2.5);
   const createRow = (id, name, a, b, group = 'house') => {
