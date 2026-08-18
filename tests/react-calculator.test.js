@@ -651,14 +651,24 @@ test('automatic rafter selection detects a bearing drawn wall as an internal sup
   assert.equal(result.roof.rafterStructure.system, 'layered');
 });
 
-test('automatic roof prefers trusses for a long clear span without an internal bearing support', () => {
+test('automatic roof switches to layered rafters above an eight-meter clear span', () => {
   const project = createDefaultProject();
   project.settings.roof.structureMode = 'auto';
   project.plan.house.h = 10;
   project.plan.rooms.forEach((room) => { room.bearing = false; });
   project.plan.walls = (project.plan.walls || []).map((wall) => ({ ...wall, bearing: false }));
   const result = calculateProject(project);
-  assert.equal(result.roof.rafterStructure.system, 'truss');
+  assert.equal(result.roof.rafterStructure.system, 'layered');
+});
+
+test('ridge direction can rotate the roof while keeping the ridge in the calculation', () => {
+  const project = createDefaultProject();
+  project.settings.roof.ridgeDirection = 'width';
+  project.plan.house = { w: 12, h: 7 };
+  const result = calculateProject(project);
+  assert.ok(result.roof.ridgeBeamLength > 7);
+  assert.ok(result.lines.some((line) => line.id === 'roof:ridge' && line.qty > 0));
+  assert.ok(result.roof.gableArea > 0);
 });
 
 test('manual 50x100 rafters resolve to the matching priced catalog board', () => {

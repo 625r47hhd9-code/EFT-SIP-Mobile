@@ -4,7 +4,7 @@ import {
   LayoutTemplate,
   Layers3, Moon, MoreHorizontal, PackageOpen, Ruler, Save, Scissors,
   Settings2, Sun, Tags, Truck, X, Hammer, PanelTop, Trees, PaintRoller,
-  HardHat, Check, RotateCcw, Box
+  HardHat, Check, RotateCcw, Box, Printer, FileText, ReceiptText, Share2
 } from 'lucide-react';
 import { useProject } from '../state/ProjectContext.jsx';
 import { calculateProject } from '../calculations/estimate-engine.js';
@@ -21,6 +21,7 @@ const PriceScreen = lazy(() => import('../screens/PriceScreen.jsx'));
 const EstimateScreen = lazy(() => import('../screens/EstimateScreen.jsx'));
 const CalculationSettingsScreen = lazy(() => import('../screens/CalculationSettingsScreen.jsx'));
 const VisualizationScreen = lazy(() => import('../screens/VisualizationScreen.jsx'));
+const SimpleEstimateScreen = lazy(() => import('../screens/SimpleEstimateScreen.jsx'));
 
 const BOTTOM_NAV = [
   { id: 'home', label: 'Дом', icon: Home },
@@ -79,6 +80,7 @@ function Screen({ active, onNavigate }) {
   if (active === 'price') return <PriceScreen />;
   if (active === 'estimate') return <EstimateScreen />;
   if (active === 'calculation-settings') return <CalculationSettingsScreen />;
+  if (active === 'simple-estimate') return <SimpleEstimateScreen />;
   return <Calculators type={active} />;
 }
 
@@ -141,6 +143,10 @@ function ActionSheet({ open, onClose, actions, theme, canUndo, canRedo }) {
           <button onClick={actions.undo} disabled={!canUndo}><ChevronLeft /><span>Отменить</span></button>
           <button onClick={actions.redo} disabled={!canRedo}><ChevronRight /><span>Повторить</span></button>
           <button onClick={actions.theme}>{theme === 'light' ? <Moon /> : <Sun />}<span>{theme === 'light' ? 'Тёмная тема' : 'Светлая тема'}</span></button>
+          <button onClick={actions.print}><Printer /><span>Печать</span></button>
+          <button onClick={actions.pdf}><FileText /><span>PDF документ</span></button>
+          <button onClick={actions.simpleEstimate}><ReceiptText /><span>Упрощённая смета</span></button>
+          <button onClick={actions.share}><Share2 /><span>Поделиться</span></button>
           <button onClick={actions.settings}><Settings2 /><span>Связи расчётов</span></button>
           <button onClick={actions.templates}><LayoutTemplate /><span>Шаблоны домов</span></button>
           <button onClick={actions.newProject}><FilePlus2 /><span>Новый проект</span></button>
@@ -313,8 +319,9 @@ export function App() {
   return (
     <div className={`app mobile-app-shell ${section === 'home' && active === 'plan' ? 'plan-editor-active' : ''}`} data-theme={theme}>
       <header className="mobile-topbar">
-        <div className="mobile-topbar-main">
-          <div className="mobile-project-title"><span>ЭФТ · SIP Calculator · M7.9.0 <b className="mobi-badge">MOBI</b></span><strong>{projectName}</strong></div>
+        <div className="mobile-topbar-main eft-header-v791">
+          <div className="eft-header-brand"><img src="./icons/eft-logo.png" alt="ЭФТ"/><div><strong>МОБИ</strong><span>версия 7.9.1</span></div></div>
+          <div className="mobile-project-title eft-project-center"><strong>{projectName}</strong><span>{Number(project.plan.house?.w||0).toLocaleString('ru-RU')} × {Number(project.plan.house?.h||0).toLocaleString('ru-RU')} м · стены {Number(project.plan.wallHeight||0).toLocaleString('ru-RU')} м</span></div>
           <button className="mobile-more-button mobile-menu-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /><span>Меню</span></button>
         </div>
         <div className="mobile-total-strip">
@@ -361,6 +368,10 @@ export function App() {
           undo: () => { undo(); setSheetOpen(false); },
           redo: () => { redo(); setSheetOpen(false); },
           theme: () => { changeTheme(); setSheetOpen(false); },
+          print: () => { setActive('estimate'); setSection('estimate'); setSheetOpen(false); window.setTimeout(() => window.print(), 250); },
+          pdf: () => { setActive('estimate'); setSection('estimate'); setSheetOpen(false); setNotice('В окне печати выберите «Сохранить как PDF»'); window.setTimeout(() => window.print(), 250); },
+          simpleEstimate: () => { setActive('simple-estimate'); setSection('home'); setSheetOpen(false); },
+          share: async () => { setSheetOpen(false); const text = `ЭФТ · ${projectName} · ${Number(project.plan.house?.w||0).toLocaleString('ru-RU')} × ${Number(project.plan.house?.h||0).toLocaleString('ru-RU')} м · ${formatMoney(calculation.totals.total)}`; if (navigator.share) { try { await navigator.share({ title: projectName, text, url: location.href }); } catch {} } else { await navigator.clipboard?.writeText(text); setNotice('Данные проекта скопированы'); } },
           settings: () => { setActive('calculation-settings'); setSection('home'); setSheetOpen(false); },
           templates: () => { setSheetOpen(false); setTemplatesOpen(true); },
           newProject,

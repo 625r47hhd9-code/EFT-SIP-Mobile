@@ -139,13 +139,14 @@ export function createDefaultProject() {
         structureMode: 'auto', rafterSystem: 'hanging', rafterStep: 0.6, rafterSection: '50x150', lathStep: 0.35, lathSection: '25x100',
         includeEaveTrim: true, includeVergeTrim: true, includeRidgeSeal: true,
         includeGutter: false,
-        gableType: 'auto', gableCount: 2
+        gableType: 'auto', gableCount: 2, ridgeDirection: 'length'
       },
       delivery: { distance: 30, trips: 2, cargoVolume: 40, baseTrip: 7000, perKm: 50, unloadingPerM3: 500 },
       engineering: { cableRoute: 120, electricPoints: 50, waterPipe: 100, waterPoints: 5, sewerLength: 20, sewerPoints: 5, ventDuct: 25, ventGrilles: 5 },
       internal: { wallArea: 300, ceilingArea: 72, laminateArea: 75, tileArea: 30, doors: 5 },
       external: { facadeArea: 130, windArea: 100, insulationArea: 110, woodArea: 40, metalArea: 120, soffitArea: 63, cornerLength: 14 },
       print: { includePlan: true, includeRoof: false, showPiles: true, showBinding: true, showDimensions: true },
+      visual: { exteriorWallSystem: 'sip', interiorWallSystem: 'frame' },
       links: clone(DEFAULT_LINKS),
       formulas: clone(DEFAULT_FORMULAS)
     },
@@ -237,6 +238,7 @@ export function migrateProject(raw) {
       internal: { ...base.settings.internal, ...(raw.settings?.internal || {}) },
       external: { ...base.settings.external, ...(raw.settings?.external || {}) },
       print: { ...base.settings.print, ...(raw.settings?.print || {}) },
+      visual: { ...base.settings.visual, ...(raw.settings?.visual || {}) },
       links: { ...base.settings.links, ...(raw.settings?.links || {}) },
       formulas: { ...base.settings.formulas, ...(raw.settings?.formulas || {}) }
     },

@@ -50,11 +50,11 @@ function resolveRafterStructure(project, geometry, frameLength) {
   const roof = project.settings.roof || {};
   const automatic = (roof.structureMode || 'auto') === 'auto';
   const hasBearingSupport = (project.plan.rooms || []).some((room) => room.include !== false && room.bearing) || (project.plan.walls || []).some((wall) => wall.bearing);
-  const clearSpan = Math.max(0, Number(project.plan.house?.h) || 0);
+  const clearSpan = Math.max(0, Number(roof.ridgeDirection === 'width' ? project.plan.house?.w : project.plan.house?.h) || 0);
   const system = geometry.shape === 'flat'
     ? 'flat'
     : automatic
-      ? (hasBearingSupport ? 'layered' : clearSpan >= 9 ? 'truss' : 'hanging')
+      ? (hasBearingSupport || clearSpan > 8 ? 'layered' : 'hanging')
       : ['hanging', 'layered', 'truss'].includes(roof.rafterSystem) ? roof.rafterSystem : 'hanging';
   const step = automatic ? 0.6 : Math.min(1.2, Math.max(0.3, Number(roof.rafterStep) || 0.6));
   const section = automatic
@@ -177,7 +177,8 @@ function foundationSection(project, index, inputs) {
 function roofSection(project, metrics, index, inputs) {
   if (!project.services.roof) return { lines: [], extensionLines: [], geometry: null, terraceRoofs: [], coldArea: 0, warmArea: 0, coldSlopeArea: 0, warmSlopeArea: 0, gableArea: 0, insulatedRafterArea: 0, terracePostCount: 0, totalArea: 0, mauerlatLength: 0, mauerlatPurchaseLength: 0, ridgeBeamLength: 0, ridgeBeamPurchaseLength: 0, mainEaveTrimPurchaseLength: 0, mainVergeTrimPurchaseLength: 0 };
   const { roof } = project.settings;
-  const span = Number(project.plan.house.h) || 0;
+  const ridgeAlongWidth = roof.ridgeDirection === 'width';
+  const span = Number(ridgeAlongWidth ? project.plan.house.w : project.plan.house.h) || 0;
   const mainRoofShape = roof.shape === 'flat' ? 'flat' : 'gable';
   const eaveOverhang = Math.max(0, Number(roof.eaveOverhang) || 0);
   const gableOverhang = Math.max(0, Number(roof.gableOverhang) || 0);
@@ -228,7 +229,7 @@ function roofSection(project, metrics, index, inputs) {
   const gableSipCutting = calculateSipRoofCutting(warmGableArea, { panelArea: inputs.formulas.panelArea, extraWastePercent: project.settings.sip.wastePercent });
   const mainSipCutting = calculateSipRoofCutting(mainWarmSlopeArea, { panelArea: inputs.formulas.panelArea, extraWastePercent: project.settings.sip.wastePercent });
   const mainGableSipCutting = calculateSipRoofCutting(mainWarmGableArea, { panelArea: inputs.formulas.panelArea, extraWastePercent: project.settings.sip.wastePercent });
-  const houseLength = Math.max(0, Number(project.plan.house.w) || 0);
+  const houseLength = Math.max(0, Number(ridgeAlongWidth ? project.plan.house.h : project.plan.house.w) || 0);
   const rafterStructure = resolveRafterStructure(project, geometry, houseLength);
   const rafterSection = rafterStructure.section;
   const rafterDepth = rafterSection === '50x200' ? 0.2 : rafterSection === '50x100' ? 0.1 : 0.15;

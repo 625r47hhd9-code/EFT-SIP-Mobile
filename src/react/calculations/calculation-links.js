@@ -77,7 +77,7 @@ export function deriveLinkedInputs(project, metrics) {
     formulas: f,
     wetRooms,
     roof: {
-      ridgeLength: value(links.roofRidgeFromPlan, project.plan.house.w + f.roofRidgeExtra, settings.roof.ridgeLength)
+      ridgeLength: value(links.roofRidgeFromPlan, (settings.roof.ridgeDirection === 'width' ? project.plan.house.h : project.plan.house.w) + f.roofRidgeExtra, settings.roof.ridgeLength)
     },
     engineering: {
       cableRoute: value(links.engineeringFromPlan, metrics.roomArea * f.cableMetersPerM2, settings.engineering.cableRoute),

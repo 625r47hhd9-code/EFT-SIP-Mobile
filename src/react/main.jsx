@@ -16,3 +16,6 @@ createRoot(document.getElementById('root')).render(
 
 
 registerFreshServiceWorker();
+
+// В установленном мобильном приложении браузер может разрешить жёсткую фиксацию портретной ориентации.
+window.addEventListener('load', () => { screen.orientation?.lock?.('portrait').catch?.(() => {}); });

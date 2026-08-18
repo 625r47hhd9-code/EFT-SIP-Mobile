@@ -96,6 +96,53 @@ function ExteriorWall({ side, dims, wallHeight, quarter, faded = false }) {
   </g>;
 }
 
+function FrameExteriorWall({ side, dims, wallHeight, quarter, faded = false }) {
+  const length = wallLength(side, dims.w, dims.h);
+  const count = Math.max(2, Math.ceil(length / 0.625));
+  const baseA = projectIso(...wallPoint(side, 0, 0.08, dims.w, dims.h), dims, quarter);
+  const baseB = projectIso(...wallPoint(side, length, 0.08, dims.w, dims.h), dims, quarter);
+  const topA = projectIso(...wallPoint(side, 0, wallHeight - 0.06, dims.w, dims.h), dims, quarter);
+  const topB = projectIso(...wallPoint(side, length, wallHeight - 0.06, dims.w, dims.h), dims, quarter);
+  return <g className={`frame-exterior-wall ${faded ? 'visual-cut-wall' : ''}`}>
+    <line x1={baseA.x} y1={baseA.y} x2={baseB.x} y2={baseB.y} className="frame-wall-plate" />
+    <line x1={topA.x} y1={topA.y} x2={topB.x} y2={topB.y} className="frame-wall-plate" />
+    {Array.from({length: count + 1}, (_, index) => {
+      const along = length * index / count;
+      const bottom = projectIso(...wallPoint(side, along, 0, dims.w, dims.h), dims, quarter);
+      const top = projectIso(...wallPoint(side, along, wallHeight, dims.w, dims.h), dims, quarter);
+      return <line key={index} x1={bottom.x} y1={bottom.y} x2={top.x} y2={top.y} className="frame-wall-stud" />;
+    })}
+  </g>;
+}
+
+function FramePartition({ segment, dims, wallHeight, quarter }) {
+  let a; let b;
+  if (segment.axis === 'h') { a = [segment.start, segment.fixed]; b = [segment.end, segment.fixed]; }
+  else if (segment.axis === 'v') { a = [segment.fixed, segment.start]; b = [segment.fixed, segment.end]; }
+  else return null;
+  const length = Math.hypot(b[0]-a[0], b[1]-a[1]);
+  const count = Math.max(1, Math.ceil(length / 0.6));
+  const pointAt = (ratio, z) => projectIso(a[0] + (b[0]-a[0])*ratio, a[1] + (b[1]-a[1])*ratio, z, dims, quarter);
+  const p1 = pointAt(0, 0.05); const p2 = pointAt(1, 0.05);
+  const t1 = pointAt(0, wallHeight-.05); const t2 = pointAt(1, wallHeight-.05);
+  return <g className="frame-partition">
+    <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} className="frame-wall-plate internal" />
+    <line x1={t1.x} y1={t1.y} x2={t2.x} y2={t2.y} className="frame-wall-plate internal" />
+    {Array.from({length:count+1},(_,i)=>{ const q1=pointAt(i/count,0); const q2=pointAt(i/count,wallHeight); return <line key={i} x1={q1.x} y1={q1.y} x2={q2.x} y2={q2.y} className="frame-wall-stud internal"/>; })}
+  </g>;
+}
+
+function InternalOpeningShape({ opening, dims, wallHeight, quarter }) {
+  const width=Math.max(.5,Number(opening.width)||.8);
+  const height=Math.min(wallHeight,Math.max(1.8,Number(opening.height)||2.05));
+  const x=Number(opening.x)||0, y=Number(opening.y)||0;
+  const horizontal=opening.orientation==='h';
+  const a=horizontal?[x-width/2,y,0]:[x,y-width/2,0];
+  const b=horizontal?[x+width/2,y,0]:[x,y+width/2,0];
+  const poly=face([a,b,[b[0],b[1],height],[a[0],a[1],height]],dims,quarter);
+  return <polygon points={pointsAttr(poly)} className="iso-door internal-door-3d"/>;
+}
+
 function FloorGrid({ dims, quarter }) {
   const lines = [];
   const xCount = Math.floor(dims.w) + 1;
@@ -165,40 +212,43 @@ function GableFaces({ dims, wallHeight, roof, quarter }) {
   if ((roof.shape || 'gable') === 'flat') return null;
   const ridge = Math.max(0.2, Number(roof.ridgeHeight) || 1.8);
   const z = wallHeight + ridge;
-  const west = face([[0,0,wallHeight],[0,dims.h,wallHeight],[0,dims.h/2,z]],dims,quarter);
-  const east = face([[dims.w,dims.h,wallHeight],[dims.w,0,wallHeight],[dims.w,dims.h/2,z]],dims,quarter);
-  return <g className="gable-faces">
-    <polygon points={pointsAttr(west)} className="gable-face" />
-    <polygon points={pointsAttr(east)} className="gable-face" />
-  </g>;
+  const alongWidth = roof.ridgeDirection === 'width';
+  const faces = alongWidth
+    ? [
+        face([[0,0,wallHeight],[dims.w,0,wallHeight],[dims.w/2,0,z]],dims,quarter),
+        face([[dims.w,dims.h,wallHeight],[0,dims.h,wallHeight],[dims.w/2,dims.h,z]],dims,quarter)
+      ]
+    : [
+        face([[0,0,wallHeight],[0,dims.h,wallHeight],[0,dims.h/2,z]],dims,quarter),
+        face([[dims.w,dims.h,wallHeight],[dims.w,0,wallHeight],[dims.w,dims.h/2,z]],dims,quarter)
+      ];
+  return <g className="gable-faces">{faces.map((poly,index)=><polygon key={index} points={pointsAttr(poly)} className="gable-face" />)}</g>;
 }
 
 function RoofGeometry({ dims, wallHeight, roof, quarter }) {
   const ridge = Math.max(0.2, Number(roof.ridgeHeight) || 1.8);
   const eave = Math.max(0, Number(roof.eaveOverhang) || 0);
   const gable = Math.max(0, Number(roof.gableOverhang) || 0);
+  const alongWidth = roof.ridgeDirection === 'width';
   if ((roof.shape || 'gable') === 'flat') {
-    const plane = face([
-      [-gable,-eave,wallHeight+.12],[dims.w+gable,-eave,wallHeight+.12],
-      [dims.w+gable,dims.h+eave,wallHeight+.12],[-gable,dims.h+eave,wallHeight+.12]
-    ],dims,quarter);
+    const plane = face([[-gable,-eave,wallHeight+.12],[dims.w+gable,-eave,wallHeight+.12],[dims.w+gable,dims.h+eave,wallHeight+.12],[-gable,dims.h+eave,wallHeight+.12]],dims,quarter);
     return <polygon points={pointsAttr(plane)} className="iso-roof" />;
   }
   const ridgeZ = wallHeight + ridge;
-  // Конёк визуально идёт на полную длину кровли вместе с торцевыми свесами.
-  const ridgeStart = -gable;
-  const ridgeEnd = dims.w + gable;
-  const northPlane = face([
-    [-gable,-eave,wallHeight],[dims.w+gable,-eave,wallHeight],
-    [ridgeEnd,dims.h/2,ridgeZ],[ridgeStart,dims.h/2,ridgeZ]
-  ],dims,quarter);
-  const southPlane = face([
-    [dims.w+gable,dims.h+eave,wallHeight],[-gable,dims.h+eave,wallHeight],
-    [ridgeStart,dims.h/2,ridgeZ],[ridgeEnd,dims.h/2,ridgeZ]
-  ],dims,quarter);
-  const ridgeA=projectIso(ridgeStart,dims.h/2,ridgeZ,dims,quarter);
-  const ridgeB=projectIso(ridgeEnd,dims.h/2,ridgeZ,dims,quarter);
-  const planes=[northPlane,southPlane].sort((a,b)=>avgDepth(a)-avgDepth(b));
+  let planes; let ridgeA; let ridgeB;
+  if (alongWidth) {
+    const west = face([[-eave,-gable,wallHeight],[-eave,dims.h+gable,wallHeight],[dims.w/2,dims.h+gable,ridgeZ],[dims.w/2,-gable,ridgeZ]],dims,quarter);
+    const east = face([[dims.w+eave,dims.h+gable,wallHeight],[dims.w+eave,-gable,wallHeight],[dims.w/2,-gable,ridgeZ],[dims.w/2,dims.h+gable,ridgeZ]],dims,quarter);
+    planes=[west,east].sort((a,b)=>avgDepth(a)-avgDepth(b));
+    ridgeA=projectIso(dims.w/2,-gable,ridgeZ,dims,quarter);
+    ridgeB=projectIso(dims.w/2,dims.h+gable,ridgeZ,dims,quarter);
+  } else {
+    const north = face([[-gable,-eave,wallHeight],[dims.w+gable,-eave,wallHeight],[dims.w+gable,dims.h/2,ridgeZ],[-gable,dims.h/2,ridgeZ]],dims,quarter);
+    const south = face([[dims.w+gable,dims.h+eave,wallHeight],[-gable,dims.h+eave,wallHeight],[-gable,dims.h/2,ridgeZ],[dims.w+gable,dims.h/2,ridgeZ]],dims,quarter);
+    planes=[north,south].sort((a,b)=>avgDepth(a)-avgDepth(b));
+    ridgeA=projectIso(-gable,dims.h/2,ridgeZ,dims,quarter);
+    ridgeB=projectIso(dims.w+gable,dims.h/2,ridgeZ,dims,quarter);
+  }
   return <g className="roof-volume">{planes.map((poly,i)=><polygon key={i} points={pointsAttr(poly)} className="iso-roof"/>)}<line x1={ridgeA.x} y1={ridgeA.y} x2={ridgeB.x} y2={ridgeB.y} className="roof-ridge-line"/></g>;
 }
 
@@ -267,10 +317,13 @@ function HouseModel({ project, calculation, roofHidden, quarter, cutaway, layers
   const floor = face([[0,0,0],[dims.w,0,0],[dims.w,dims.h,0],[0,dims.h,0]],dims,quarter);
   const exterior=['north','east','south','west'].map(side=>({side,depth:avgDepth(face(sideFace(side,dims.w,dims.h,wallHeight),dims,quarter))})).sort((a,b)=>a.depth-b.depth);
   const partitions=unifiedWallSegments(plan).filter(segment=>segment.axis!=='d');
-  const openings=(plan.openings||[]).filter(opening=>opening.outer!==false);
+  const exteriorOpenings=(plan.openings||[]).filter(opening=>opening.outer!==false);
+  const interiorOpenings=(plan.openings||[]).filter(opening=>opening.type==='door'&&opening.outer===false);
   const roomPolys=(plan.rooms||[]).filter(room=>room.include!==false);
   const platforms=(plan.platforms||[]).filter(item=>item.include!==false);
   const partitionThickness=Number(plan.partitionThickness)||.1;
+  const exteriorSystem=project.settings.visual?.exteriorWallSystem||'sip';
+  const interiorSystem=project.settings.visual?.interiorWallSystem||'frame';
   return <svg className="house-visual-svg engineering-model polished-house-model m790-house" viewBox="0 0 780 570" role="img" aria-label="Трёхмерная визуализация дома">
     <defs>
       <pattern id="osbWallTexture" width="34" height="24" patternUnits="userSpaceOnUse"><rect width="34" height="24" fill="#f2e6cf"/><path d="M2 6l9-3m-4 12l12-5m2-7l8 4m-10 10l11-3M1 21l7-5M25 2l6 3" stroke="#c6a370" strokeWidth="1.1" opacity=".34"/></pattern>
@@ -284,14 +337,19 @@ function HouseModel({ project, calculation, roofHidden, quarter, cutaway, layers
       {platforms.map(platform=><Platform3D key={platform.id} platform={platform} dims={dims} quarter={quarter}/>)}
       <polygon points={pointsAttr(floor)} className="visual-floor polished-floor"/><FloorGrid dims={dims} quarter={quarter}/>
       {roomPolys.map((room,index)=><RoomSurface key={room.id} room={room} index={index} dims={dims} quarter={quarter}/>)}
-      {layers.walls?exterior.map((item,index)=><ExteriorWall key={item.side} side={item.side} dims={dims} wallHeight={wallHeight} quarter={quarter} faded={cutaway&&index>=2}/>):null}
-      {layers.partitions?partitions.map((segment,index)=><PartitionFace key={index} segment={segment} dims={dims} wallHeight={wallHeight} quarter={quarter} thickness={partitionThickness}/>):null}
-      {layers.openings?openings.map(opening=><OpeningShape key={opening.id} opening={opening} dims={dims} wallHeight={wallHeight} quarter={quarter}/>):null}
+      {layers.walls?exterior.map((item,index)=>exteriorSystem==='frame'
+        ? <FrameExteriorWall key={item.side} side={item.side} dims={dims} wallHeight={wallHeight} quarter={quarter} faded={cutaway&&index>=2}/>
+        : <ExteriorWall key={item.side} side={item.side} dims={dims} wallHeight={wallHeight} quarter={quarter} faded={cutaway&&index>=2}/>):null}
+      {layers.partitions?partitions.map((segment,index)=>interiorSystem==='frame'
+        ? <FramePartition key={index} segment={segment} dims={dims} wallHeight={wallHeight} quarter={quarter}/>
+        : <PartitionFace key={index} segment={segment} dims={dims} wallHeight={wallHeight} quarter={quarter} thickness={Math.max(partitionThickness,.124)}/>):null}
+      {layers.openings?exteriorOpenings.map(opening=><OpeningShape key={opening.id} opening={opening} dims={dims} wallHeight={wallHeight} quarter={quarter}/>):null}
+      {layers.openings?interiorOpenings.map(opening=><InternalOpeningShape key={opening.id} opening={opening} dims={dims} wallHeight={wallHeight} quarter={quarter}/>):null}
       {layers.roof&&!roofHidden?<><GableFaces dims={dims} wallHeight={wallHeight} roof={roof} quarter={quarter}/><RoofGeometry dims={dims} wallHeight={wallHeight} roof={roof} quarter={quarter}/></>:null}
     </g>
     <text x="24" y="32" className="visual-caption">{formatNumber(dims.w)} × {formatNumber(dims.h)} м · стены {formatNumber(wallHeight)} м</text>
     <text x="24" y="53" className="visual-subcaption">Главная 3D-модель · {roof.shape==='flat'?'плоская':'двускатная'} кровля</text>
-    <text x="24" y="73" className="visual-subcaption">Комнат: {roomPolys.length} · пристроек: {platforms.length} · кровля: {formatNumber(calculation?.roof?.totalArea||0)} м²</text>
+    <text x="24" y="73" className="visual-subcaption">Комнат: {roomPolys.length} · стены: {exteriorSystem==='frame'?'каркас':'СИП'} / {interiorSystem==='frame'?'каркас':'СИП'} · кровля: {formatNumber(calculation?.roof?.totalArea||0)} м²</text>
   </svg>;
 }
 function planOpeningSegments(opening, plan) {
@@ -506,66 +564,51 @@ function StepControl({ label, value, note, onDown, onUp, disabled = false }) {
   </div>;
 }
 
-function RafterSectionDrawing({ system, section, step, span, ridgeHeight, ceilingThickness }) {
-  const W=820,H=520;
-  const lx=148,rx=672,cx=410;
-  const ceilingTop=390, ceilingH=34, wallBottom=466;
-  const rise=clamp(145+ridgeHeight*28,160,215), ry=ceilingTop-rise;
-  const eave=36, le=lx-eave,re=rx+eave;
-  const midY=ry+(ceilingTop-ry)*.52;
+function RafterSectionDrawing({ system, section, span, ridgeHeight, ceilingThickness, eaveOverhang }) {
+  const W=820,H=470;
+  const lx=160,rx=660,cx=410;
+  const ceilingTop=360, ceilingH=30;
+  const rise=clamp(130+ridgeHeight*25,145,205), ry=ceilingTop-rise;
+  const eavePx=clamp(22+(Number(eaveOverhang)||0)*30,26,52);
+  const le=lx-eavePx,re=rx+eavePx;
   const lm={x:(le+cx)/2,y:(ceilingTop+ry)/2};
   const rm={x:(re+cx)/2,y:(ceilingTop+ry)/2};
-  const centralBeamY=ceilingTop-10;
-  const node=(x,y,n)=><g className="r-node"><circle cx={x} cy={y} r="11"/><text x={x} y={y+4}>{n}</text></g>;
-  return <svg viewBox={`0 0 ${W} ${H}`} className="rafter-section-svg m790-rafter-section">
-    <defs><pattern id="sipCore" width="18" height="12" patternUnits="userSpaceOnUse"><rect width="18" height="12" fill="#f3f0e7"/><path d="M0 6h18" stroke="#ded7c6"/><circle cx="4" cy="3" r="1" fill="#c9b99d"/><circle cx="13" cy="9" r="1" fill="#c9b99d"/></pattern></defs>
-    <rect x="0" y="0" width={W} height={H} className="rafter-paper"/>
+  const midY=ry+(ceilingTop-ry)*.52;
+  const beamY=ceilingTop-11;
+  return <svg viewBox={`0 0 ${W} ${H}`} className="rafter-section-svg m791-rafter-section" role="img" aria-label="Схема стропильной системы">
+    <defs>
+      <pattern id="sipCore791" width="18" height="12" patternUnits="userSpaceOnUse"><rect width="18" height="12" fill="#f3f0e7"/><path d="M0 6h18" stroke="#ded7c6"/><circle cx="4" cy="3" r="1" fill="#c9b99d"/><circle cx="13" cy="9" r="1" fill="#c9b99d"/></pattern>
+    </defs>
+    <rect width={W} height={H} className="rafter-paper"/>
     <g className="rafter-building-base">
-      <rect x={lx-12} y={ceilingTop} width={rx-lx+24} height={ceilingH} className="sip-ceiling-panel"/>
-      <rect x={lx-18} y={ceilingTop-3} width="12" height={ceilingH+6} className="sip-end-board"/>
-      <rect x={rx+6} y={ceilingTop-3} width="12" height={ceilingH+6} className="sip-end-board"/>
-      <rect x={lx-28} y={ceilingTop+ceilingH} width="56" height={wallBottom-ceilingTop-ceilingH} className="support-wall"/>
-      <rect x={rx-28} y={ceilingTop+ceilingH} width="56" height={wallBottom-ceilingTop-ceilingH} className="support-wall"/>
-      <rect x={lx-30} y={ceilingTop-17} width="60" height="16" rx="3" className="mauerlat-beam"/>
-      <rect x={rx-30} y={ceilingTop-17} width="60" height="16" rx="3" className="mauerlat-beam"/>
+      <rect x={lx-16} y={ceilingTop} width={rx-lx+32} height={ceilingH} className="sip-ceiling-panel"/>
+      <rect x={lx-22} y={ceilingTop-2} width="10" height={ceilingH+4} className="sip-end-board"/>
+      <rect x={rx+12} y={ceilingTop-2} width="10" height={ceilingH+4} className="sip-end-board"/>
+      <rect x={lx-30} y={ceilingTop-68} width="58" height="68" className="sip-wall-support"/>
+      <rect x={rx-28} y={ceilingTop-68} width="58" height="68" className="sip-wall-support"/>
+      <rect x={lx-30} y={ceilingTop-16} width="60" height="14" rx="3" className="mauerlat-beam"/>
+      <rect x={rx-30} y={ceilingTop-16} width="60" height="14" rx="3" className="mauerlat-beam"/>
     </g>
     <g className="rafter-timber">
       <line x1={le} y1={ceilingTop+2} x2={cx} y2={ry}/><line x1={cx} y1={ry} x2={re} y2={ceilingTop+2}/>
-      {system==='hanging'?<line x1={lx+94} y1={midY} x2={rx-94} y2={midY} className="collar-beam"/>:null}
+      {system==='hanging'?<line x1={lm.x-12} y1={midY} x2={rm.x+12} y2={midY} className="collar-beam"/>:null}
       {system==='layered'?<>
-        <rect x={cx-34} y={centralBeamY} width="68" height="14" rx="2" className="central-mauerlat"/>
-        <line x1={cx} y1={centralBeamY} x2={cx} y2={ry} className="central-post"/>
-        <line x1={cx} y1={centralBeamY} x2={lm.x} y2={lm.y} className="brace"/>
-        <line x1={cx} y1={centralBeamY} x2={rm.x} y2={rm.y} className="brace"/>
-        <rect x={cx-9} y={ry-9} width="18" height="18" rx="3" className="ridge-beam-node"/>
+        <rect x={cx-34} y={beamY} width="68" height="13" rx="2" className="central-mauerlat"/>
+        <line x1={cx} y1={beamY} x2={cx} y2={ry} className="central-post"/>
+        <line x1={cx} y1={beamY} x2={lm.x} y2={lm.y} className="brace"/>
+        <line x1={cx} y1={beamY} x2={rm.x} y2={rm.y} className="brace"/>
+        <rect x={cx-10} y={ry-8} width="20" height="16" rx="2" className="ridge-beam-node"/>
       </>:null}
       {system==='truss'?<>
-        <line x1={lx} y1={ceilingTop-8} x2={rx} y2={ceilingTop-8} className="bottom-chord"/>
-        <line x1={cx} y1={ceilingTop-8} x2={cx} y2={ry} className="central-post"/>
-        <line x1={cx} y1={ceilingTop-8} x2={lm.x} y2={lm.y} className="brace"/>
-        <line x1={cx} y1={ceilingTop-8} x2={rm.x} y2={rm.y} className="brace"/>
+        <line x1={lx} y1={ceilingTop-7} x2={rx} y2={ceilingTop-7} className="bottom-chord"/>
+        <line x1={cx} y1={ceilingTop-7} x2={cx} y2={ry} className="central-post"/>
+        <line x1={cx} y1={ceilingTop-7} x2={lm.x} y2={lm.y} className="brace"/>
+        <line x1={cx} y1={ceilingTop-7} x2={rm.x} y2={rm.y} className="brace"/>
       </>:null}
     </g>
-    <g className="rafter-overhang-marks"><line x1={le} y1={ceilingTop+14} x2={lx} y2={ceilingTop+14}/><line x1={rx} y1={ceilingTop+14} x2={re} y2={ceilingTop+14}/><text x={(le+lx)/2} y={ceilingTop+31}>свес</text><text x={(rx+re)/2} y={ceilingTop+31}>свес</text></g>
-    {node(lx,ceilingTop-9,1)}{node(rx,ceilingTop-9,1)}{node(cx,ry,2)}
-    {system==='hanging'?node(cx,midY,3):null}
-    {system==='layered'?<>{node(cx,centralBeamY,3)}{node(lm.x,lm.y,4)}{node(rm.x,rm.y,4)}</>:null}
-    {system==='truss'?<>{node(cx,ceilingTop-8,3)}{node(lm.x,lm.y,4)}{node(rm.x,rm.y,4)}</>:null}
-    <g className="rafter-callout"><path d={`M${lx-3} ${ceilingTop-10} L82 338 L24 338`}/><text x="24" y="329">Мауэрлат 100×150</text></g>
-    <g className="rafter-callout"><path d={`M${lx-12} ${ceilingTop+16} L84 405 L24 405`}/><text x="24" y="396">СИП-потолок {ceilingThickness} мм + торцевая доска</text></g>
-    <g className="rafter-callout"><path d={`M${lm.x} ${lm.y} L154 210 L32 210`}/><text x="28" y="200">Стропильная нога {section.replace('x','×')}</text></g>
-    {system==='hanging'?<g className="rafter-callout"><path d={`M${cx+40} ${midY} L606 300 L718 300`}/><text x="722" y="295">Средняя перемычка / ригель</text></g>:null}
-    {system==='layered'?<>
-      <g className="rafter-callout"><path d={`M${cx} ${ry} L578 150 L712 150`}/><text x="716" y="145">Коньковый прогон</text></g>
-      <g className="rafter-callout"><path d={`M${cx} ${centralBeamY} L582 360 L712 360`}/><text x="716" y="355">Центральный мауэрлат</text></g>
-      <g className="rafter-callout"><path d={`M${rm.x} ${rm.y} L612 252 L712 252`}/><text x="716" y="247">Подкос</text></g>
-    </>:null}
-    {system==='truss'?<>
-      <g className="rafter-callout"><path d={`M${cx} ${ceilingTop-8} L590 360 L712 360`}/><text x="716" y="355">Нижний пояс</text></g>
-      <g className="rafter-callout"><path d={`M${rm.x} ${rm.y} L612 252 L712 252`}/><text x="716" y="247">Раскос фермы</text></g>
-    </>:null}
-    <line x1={lx} y1="482" x2={rx} y2="482" className="rafter-dim"/><text x={cx} y="502" className="rafter-dim-text">пролёт {formatNumber(span)} м</text>
-    <line x1="742" y1={ceilingTop} x2="742" y2={ry} className="rafter-dim"/><text x="758" y={(ceilingTop+ry)/2} className="rafter-dim-text vertical">конёк {formatNumber(ridgeHeight)} м</text>
+    <g className="rafter-overhang-visual"><line x1={le} y1={ceilingTop+16} x2={lx} y2={ceilingTop+16}/><line x1={rx} y1={ceilingTop+16} x2={re} y2={ceilingTop+16}/></g>
+    <line x1={lx} y1="428" x2={rx} y2="428" className="rafter-dim"/><text x={cx} y="449" className="rafter-dim-text">{formatNumber(span)} м</text>
+    <line x1="730" y1={ceilingTop} x2="730" y2={ry} className="rafter-dim"/><text x="748" y={(ceilingTop+ry)/2} className="rafter-dim-text vertical">{formatNumber(ridgeHeight)} м</text>
   </svg>;
 }
 
@@ -573,14 +616,12 @@ function LathDrawing({ roof, calculation }) {
   const step=Math.max(.1,Number(roof.lathStep)||.35);
   const count=clamp(Math.round(3.5/step),5,18);
   const rafters=10;
-  return <svg viewBox="0 0 820 430" className="lath-plan-svg">
-    <defs><pattern id="roofGrid" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#ebe9f2" strokeWidth="1"/></pattern></defs>
-    <rect width="820" height="430" fill="url(#roofGrid)"/><rect x="72" y="64" width="676" height="298" rx="4" className="lath-roof-outline"/>
-    <line x1="410" y1="64" x2="410" y2="362" className="lath-ridge"/>
-    {Array.from({length:rafters},(_,i)=>{const x=94+i*(632/(rafters-1));return <line key={`r-${i}`} x1={x} y1="74" x2={x} y2="352" className="lath-rafter-under"/>})}
-    {Array.from({length:count},(_,i)=>{const y=82+i*(262/Math.max(1,count-1));return <line key={`l-${i}`} x1="82" y1={y} x2="738" y2={y} className="lath-board-line"/>})}
-    <text x="86" y="48" className="lath-title">Вид сверху · обрешётка поперёк стропил</text><text x="734" y="48" textAnchor="end" className="lath-subtitle">{roof.lathSection==='25x150'?'25×150':'25×100'} мм · шаг {Math.round(step*1000)} мм</text>
-    <text x="86" y="392" className="lath-subtitle">Ориентировочно: {calculation.roof.mainLathBoardCount||0} досок × 6 м · {formatNumber(calculation.roof.mainLathRequiredLength||0)} м.п.</text>
+  return <svg viewBox="0 0 820 400" className="lath-plan-svg m791-lath-plan" role="img" aria-label="Схема обрешётки сверху">
+    <defs><pattern id="roofGrid791" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#eef1e8" strokeWidth="1"/></pattern></defs>
+    <rect width="820" height="400" fill="url(#roofGrid791)"/><rect x="72" y="54" width="676" height="286" rx="4" className="lath-roof-outline"/>
+    <line x1="410" y1="54" x2="410" y2="340" className="lath-ridge"/>
+    {Array.from({length:rafters},(_,i)=>{const x=94+i*(632/(rafters-1));return <line key={`r-${i}`} x1={x} y1="64" x2={x} y2="330" className="lath-rafter-under"/>})}
+    {Array.from({length:count},(_,i)=>{const y=72+i*(250/Math.max(1,count-1));return <line key={`l-${i}`} x1="82" y1={y} x2="738" y2={y} className="lath-board-line"/>})}
   </svg>;
 }
 
@@ -591,47 +632,44 @@ function RafterSystemEditor({ project, calculation, setRoof }) {
   const system=structure.system||roof.rafterSystem||'hanging';
   const section=structure.section||roof.rafterSection||'50x150';
   const step=Number(structure.step)||Number(roof.rafterStep)||.6;
-  const span=Math.max(1,Number(project.plan.house?.h)||8);
+  const ridgeAlongWidth=roof.ridgeDirection==='width';
+  const span=Math.max(1,Number(ridgeAlongWidth?project.plan.house?.w:project.plan.house?.h)||8);
   const ridgeHeight=Math.max(.4,Number(roof.ridgeHeight)||1.8);
   const hasBearingSupport=(project.plan.rooms||[]).some(room=>room.include!==false&&room.bearing)||(project.plan.walls||[]).some(wall=>wall.bearing);
-  const [tile,setTile]=useState('structure');
   const setSystem=(value)=>{setRoof('structureMode','manual');setRoof('rafterSystem',value)};
   const stepValue=(delta)=>{setRoof('structureMode','manual');setRoof('rafterStep',clamp(Math.round((step+delta)*100)/100,.3,1.2))};
   const ridgeValue=(delta)=>setRoof('ridgeHeight',clamp(Math.round((ridgeHeight+delta)*100)/100,.4,5));
   const rafterSections=['50x100','50x150','50x200'];
   const cycleSection=(dir)=>{setRoof('structureMode','manual');const i=Math.max(0,rafterSections.indexOf(section));setRoof('rafterSection',rafterSections[(i+dir+rafterSections.length)%rafterSections.length])};
   const lathSection=roof.lathSection==='25x150'?'25x150':'25x100';
-  const cycleLath=()=>setRoof('lathSection',lathSection==='25x100'?'25x150':'25x100');
+  const cycleLath=(dir)=>{const items=['25x100','25x150'];const i=items.indexOf(lathSection);setRoof('lathSection',items[(i+dir+items.length)%items.length])};
   const lathStep=Math.max(.1,Number(roof.lathStep)||.35);
   const setLathStep=(delta)=>setRoof('lathStep',clamp(Math.round((lathStep+delta)*100)/100,.1,1.2));
-  const systems=[['hanging','Висячая','ригель между ногами'],['layered','Наслонная','стойка + подкосы'],['truss','Ферма','стойка + 2 раскоса']];
-  return <div className="rafter-editor-shell m790-roof-editor">
-    <div className="roof-big-tiles">
-      <button type="button" className={tile==='structure'?'active':''} onClick={()=>setTile('structure')}><span className="roof-tile-visual"><RafterMini type={system}/></span><span><strong>Стропильная ферма</strong><small>{system==='layered'?'Наслонная':system==='truss'?'Ферма':'Висячая'}</small></span></button>
-      <button type="button" className={tile==='lath'?'active':''} onClick={()=>setTile('lath')}><span className="roof-tile-visual lath-mini"><i/><i/><i/><i/></span><span><strong>Обрешётка</strong><small>{lathSection.replace('x','×')} · {Math.round(lathStep*1000)} мм</small></span></button>
-    </div>
+  return <div className="rafter-editor-shell m791-roof-editor">
+    <Panel title="Стропильная система" description="Сначала выбирается несущая схема, затем шаг, сечение и высота. Схема ниже обновляется сразу.">
+      <div className="rafter-auto-row"><button type="button" className={automatic?'active':''} onClick={()=>setRoof('structureMode',automatic?'manual':'auto')}><Settings2/><span><strong>Автоматический подбор</strong><small>{automatic?'до 8 м — висячая; больше 8 м или с внутренней опорой — наслонная':'ручная настройка'}</small></span><i className={automatic?'on':''}/></button></div>
+      <div className="form-grid two rafter-select-row">
+        <SelectField label="Система" value={system} onChange={setSystem} options={[{value:'hanging',label:'Висячая'},{value:'layered',label:'Наслонная'},{value:'truss',label:'Ферма'}]} />
+        <SelectField label="Направление конька" value={roof.ridgeDirection||'length'} onChange={(value)=>setRoof('ridgeDirection',value)} options={[{value:'length',label:'Вдоль длины дома'},{value:'width',label:'Вдоль ширины дома'}]} />
+      </div>
+      <div className="roof-step-grid">
+        <StepControl label="Шаг стропил / ферм" value={`${Math.round(step*1000)} мм`} onDown={()=>stepValue(-.05)} onUp={()=>stepValue(.05)}/>
+        <StepControl label="Сечение стропил" value={`${section.replace('x','×')} мм`} onDown={()=>cycleSection(-1)} onUp={()=>cycleSection(1)}/>
+        <StepControl label="Высота конька" value={`${formatNumber(ridgeHeight)} м`} onDown={()=>ridgeValue(-.1)} onUp={()=>ridgeValue(.1)}/>
+        <div className="roof-step-control static"><div><span>Внутренняя несущая опора</span><strong>{hasBearingSupport?'Есть':'Нет'}</strong></div></div>
+      </div>
+    </Panel>
+    <article className="rafter-drawing-card clean-rafter-drawing"><header><div><h2>{system==='truss'?'Стропильная ферма':system==='layered'?'Наслонная система':'Висячая система'}</h2><p>Чистая конструктивная схема без служебных подписей на рисунке</p></div><strong>{section.replace('x','×')} мм · {Math.round(step*1000)} мм</strong></header><RafterSectionDrawing system={system} section={section} span={span} ridgeHeight={ridgeHeight} ceilingThickness={project.settings.sip.ceilingThickness} eaveOverhang={roof.eaveOverhang}/></article>
 
-    {tile==='structure'?<>
-      <div className="rafter-system-choice three-cards m790-system-choice">{systems.map(([id,label,note])=><button key={id} type="button" className={system===id?'active':''} onClick={()=>setSystem(id)}><RafterMini type={id}/><span><strong>{label}</strong><small>{note}</small></span>{system===id?<Check/>:null}</button>)}</div>
-      <article className="rafter-drawing-card"><header><div><h2>{system==='truss'?'Стропильная ферма':system==='layered'?'Наслонная стропильная система':'Висячая стропильная система'}</h2><p>Поперечный разрез с опорными и соединительными узлами</p></div><strong>{section.replace('x','×')} мм · шаг {Math.round(step*1000)} мм</strong></header><RafterSectionDrawing system={system} section={section} step={step} span={span} ridgeHeight={ridgeHeight} ceilingThickness={project.settings.sip.ceilingThickness}/></article>
-      <Panel title="Параметры стропильной системы" description="Кнопки вверх и вниз позволяют быстро проверить соседние значения без клавиатуры.">
-        <div className="rafter-auto-row"><button type="button" className={automatic?'active':''} onClick={()=>setRoof('structureMode',automatic?'manual':'auto')}><Settings2/><span><strong>Автоматический подбор</strong><small>{automatic?'система и сечение выбираются из пролёта и опор':'ручная настройка'}</small></span><i className={automatic?'on':''}/></button></div>
-        <div className="roof-step-grid">
-          <StepControl label="Шаг стропил / ферм" value={`${Math.round(step*1000)} мм`} onDown={()=>stepValue(-.05)} onUp={()=>stepValue(.05)}/>
-          <StepControl label="Сечение стропил" value={`${section.replace('x','×')} мм`} onDown={()=>cycleSection(-1)} onUp={()=>cycleSection(1)}/>
-          <StepControl label="Высота конька" value={`${formatNumber(ridgeHeight)} м`} onDown={()=>ridgeValue(-.1)} onUp={()=>ridgeValue(.1)}/>
-          <div className="roof-step-control static"><div><span>Внутренняя несущая опора</span><strong>{hasBearingSupport?'Есть на плане':'Нет на плане'}</strong><small>{system==='layered'&&!hasBearingSupport?'Для наслонной схемы нужна опора':''}</small></div></div>
-        </div>
-      </Panel>
-    </>:<>
-      <article className="rafter-drawing-card lath-card"><header><div><h2>Обрешётка</h2><p>Схема сверху: стропила подложкой, доска обрешётки поперёк ската</p></div><strong>{lathSection.replace('x','×')} мм · шаг {Math.round(lathStep*1000)} мм</strong></header><LathDrawing roof={roof} calculation={calculation}/></article>
-      <Panel title="Параметры обрешётки" description="Размер доски и шаг сразу участвуют в закупочном объёме кровли."><div className="roof-step-grid">
+    <Panel title="Обрешётка" description="Идёт следующим блоком по ходу прокрутки. Настройка шага и доски без переключения плиток.">
+      <div className="roof-step-grid">
         <StepControl label="Шаг обрешётки" value={`${Math.round(lathStep*1000)} мм`} onDown={()=>setLathStep(-.05)} onUp={()=>setLathStep(.05)}/>
-        <StepControl label="Доска обрешётки" value={`${lathSection.replace('x','×')} мм`} onDown={cycleLath} onUp={cycleLath}/>
-        <div className="roof-step-control static"><div><span>Количество досок</span><strong>{calculation.roof.mainLathBoardCount||0} шт × 6 м</strong></div></div>
+        <StepControl label="Доска обрешётки" value={`${lathSection.replace('x','×')} мм`} onDown={()=>cycleLath(-1)} onUp={()=>cycleLath(1)}/>
+        <div className="roof-step-control static"><div><span>Закупка</span><strong>{calculation.roof.mainLathBoardCount||0} шт × 6 м</strong></div></div>
         <div className="roof-step-control static"><div><span>Расчётная длина</span><strong>{formatNumber(calculation.roof.mainLathRequiredLength||0)} м.п.</strong></div></div>
-      </div></Panel>
-    </>}
+      </div>
+    </Panel>
+    <article className="rafter-drawing-card lath-card clean-lath-drawing"><header><div><h2>Схема обрешётки</h2><p>Вид сверху: стропила подложкой, обрешётка поперёк ската</p></div><strong>{lathSection.replace('x','×')} мм · {Math.round(lathStep*1000)} мм</strong></header><LathDrawing roof={roof} calculation={calculation}/></article>
   </div>;
 }
 
@@ -676,7 +714,7 @@ export default function VisualizationScreen() {
   return (
     <section className="visualization-screen engineering-visualization m771-visualization">
       <div className="mobile-screen-intro visualization-intro">
-        <span className="eyebrow">Инженерная визуализация · M7.9.0</span>
+        <span className="eyebrow">Инженерная визуализация · 7.9.1</span>
         <h1>3D-вид, план и стропильная система</h1><p>Рабочая визуализация проекта.</p>
       </div>
 

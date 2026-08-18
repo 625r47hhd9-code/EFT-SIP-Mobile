@@ -152,7 +152,7 @@ export default function ParametersScreen() {
   return (
     <div className="screen parameters-screen-v3">
       <div className="all-params-intro">
-        <span className="eyebrow">Полная проверка проекта · M7.9.0</span>
+        <span className="eyebrow">Полная проверка проекта · 7.9.1</span>
         <h1>Все параметры дома</h1>
         <p>Один последовательный экран. Прокручивайте сверху вниз и проверяйте проект по разделам: от габаритов и фундамента до инженерии, отделки, доставки и расчётных связей.</p>
       </div>
@@ -217,7 +217,10 @@ export default function ParametersScreen() {
             <SelectField label="Ширина раскладки пола" value={String(sip.floorPanelWidth)} onChange={(value) => updateSetting('sip', 'floorPanelWidth', value)} options={[{value:'1.25',label:'1250 мм'},{value:'0.625',label:'625 мм'}]} />
             <SelectField label="Ширина раскладки потолка" value={String(sip.ceilingPanelWidth)} onChange={(value) => updateSetting('sip', 'ceilingPanelWidth', value)} options={[{value:'1.25',label:'1250 мм'},{value:'0.625',label:'625 мм'}]} />
             <NumberField label="Запас СИП" value={sip.wastePercent} suffix="%" min={0} max={30} step={1} onChange={(value) => updateSetting('sip', 'wastePercent', value)} />
+            <SelectField label="Наружные стены в 3D" value={project.settings.visual?.exteriorWallSystem || 'sip'} onChange={(value) => updateSetting('visual', 'exteriorWallSystem', value)} options={[{value:'sip',label:'СИП-панели'},{value:'frame',label:'Каркас'}]} />
+            <SelectField label="Внутренние стены в 3D" value={project.settings.visual?.interiorWallSystem || 'frame'} onChange={(value) => updateSetting('visual', 'interiorWallSystem', value)} options={[{value:'sip',label:'СИП-панели'},{value:'frame',label:'Каркас'}]} />
           </div>
+          <p className="all-params-hint">Тип наружных и внутренних стен управляет отображением в 3D. Расчёт материалов по-прежнему определяется составом проекта и параметрами конструкций.</p>
         </Section>
 
         <Section number={5} title="Стропильная система и кровля" subtitle="Несущая схема, геометрия скатов, обрешётка и доборные элементы" icon={Hammer}>
@@ -234,14 +237,15 @@ export default function ParametersScreen() {
               {value:'50x100',label:'50×100 мм'},
               {value:'50x150',label:'50×150 мм'},
               {value:'50x200',label:'50×200 мм'},
-              {value:'100x150',label:'100×150 мм'}
             ]} />
           </div>
+          <p className="all-params-hint">Автоподбор: до 8 м чистого пролёта используется висячая схема; при пролёте больше 8 м или наличии внутренней несущей опоры — наслонная. Фермы доступны в ручном режиме.</p>
 
           <Subhead>Геометрия кровли</Subhead>
           <div className="form-grid four">
             <SelectField label="Форма кровли" value={roof.shape || 'gable'} onChange={(value) => updateSetting('roof', 'shape', value)} options={[{value:'gable',label:'Двускатная'},{value:'flat',label:'Плоская'}]} />
             <SelectField label="Тип кровли" value={roof.type || 'cold'} onChange={(value) => updateSetting('roof', 'type', value)} options={[{value:'cold',label:'Холодная'},{value:'sip',label:'Тёплая СИП'},{value:'combo',label:'Комбинированная'}]} />
+            <SelectField label="Направление конька" value={roof.ridgeDirection || 'length'} onChange={(value) => updateSetting('roof', 'ridgeDirection', value)} options={[{value:'length',label:'Вдоль длины дома'},{value:'width',label:'Вдоль ширины дома'}]} />
             {roof.shape !== 'flat' ? <NumberField label="Высота конька" value={roof.ridgeHeight} suffix="м" min={0.1} step={0.1} onChange={(value) => updateSetting('roof', 'ridgeHeight', value)} /> : null}
             <NumberField label={roof.shape === 'flat' ? 'Длина кровли' : 'Длина конька'} value={roof.ridgeLength} suffix="м" min={0.1} step={0.1} onChange={(value) => updateSetting('roof', 'ridgeLength', value)} />
             <NumberField label="Карнизный свес" value={roof.eaveOverhang} suffix="м" min={0} max={2} step={0.05} onChange={(value) => updateSetting('roof', 'eaveOverhang', value)} />
