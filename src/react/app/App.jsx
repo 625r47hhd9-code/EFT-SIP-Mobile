@@ -320,7 +320,7 @@ export function App() {
     <div className={`app mobile-app-shell ${section === 'home' && active === 'plan' ? 'plan-editor-active' : ''}`} data-theme={theme}>
       <header className="mobile-topbar">
         <div className="mobile-topbar-main eft-header-v791">
-          <div className="eft-header-brand"><img src="./icons/eft-logo.png" alt="ЭФТ"/><div><strong>МОБИ</strong><span>версия 7.9.1</span></div></div>
+          <div className="eft-header-brand"><img src="./icons/eft-logo.png" alt="ЭФТ"/><div><strong>M</strong><span>7.9.2</span></div></div>
           <div className="mobile-project-title eft-project-center"><strong>{projectName}</strong><span>{Number(project.plan.house?.w||0).toLocaleString('ru-RU')} × {Number(project.plan.house?.h||0).toLocaleString('ru-RU')} м · стены {Number(project.plan.wallHeight||0).toLocaleString('ru-RU')} м</span></div>
           <button className="mobile-more-button mobile-menu-button" onClick={() => setSheetOpen(true)} aria-label="Меню проекта"><MoreHorizontal /><span>Меню</span></button>
         </div>

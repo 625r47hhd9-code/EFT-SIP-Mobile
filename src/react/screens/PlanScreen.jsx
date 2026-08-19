@@ -19,7 +19,7 @@ import {
 } from '../planner/geometry.js';
 
 const VIEW = { width: 1100, height: 760 };
-const MOBILE_RELEASE_LABEL = '7.9.1';
+const MOBILE_RELEASE_LABEL = '7.9.2';
 const SKETCHES_KEY = 'eft-react-plan-sketches-v47';
 const DRAW_TOOLS = new Set(['room', 'wall', 'dimension', 'pileRow', 'bindingLine', 'terrace', 'porch']);
 const TOOLS = [
@@ -67,7 +67,13 @@ function previewPlan(source, gesture) {
   if (gesture.kind === 'endpoint') {
     const key = gesture.type === 'wall' ? 'walls' : gesture.type === 'dimension' ? 'dimensions' : gesture.type === 'bindingLine' ? 'bindingLines' : 'pileRows';
     const item = itemFor(key); const point = snapPoint(end, axes);
-    if (item) { item[`x${gesture.index + 1}`] = point.x; item[`y${gesture.index + 1}`] = point.y; }
+    if (item) {
+      item[`x${gesture.index + 1}`] = point.x; item[`y${gesture.index + 1}`] = point.y;
+      if (gesture.type === 'pileRow') {
+        const normalized = normalizePileRowToPerimeter(item, plan);
+        if (normalized) Object.assign(item, normalized);
+      }
+    }
     return plan;
   }
   if (gesture.type === 'room') {
@@ -93,6 +99,10 @@ function previewPlan(source, gesture) {
       const first = snapPoint({ x: item.x1 + dx, y: item.y1 + dy }, axes);
       const delta = { x: first.x - item.x1, y: first.y - item.y1 };
       item.x1 = first.x; item.y1 = first.y; item.x2 = roundCoord(item.x2 + delta.x); item.y2 = roundCoord(item.y2 + delta.y);
+      if (gesture.type === 'pileRow') {
+        const normalized = normalizePileRowToPerimeter(item, plan);
+        if (normalized) Object.assign(item, normalized);
+      }
     }
   }
   return plan;
@@ -449,7 +459,10 @@ function PlanCanvas({ plan, tool, selected, setSelected, commitPlan, polygonDraf
           if (current.type === 'dimension') {
             next.dimensions.push(dimensionOutsideHouse(line, next.house));
           }
-          if (current.type === 'pileRow') next.pileRows.push({ ...line, name: `Ряд ${next.pileRows.length + 1}`, count: Math.max(2, Math.ceil(distance / 2.5) + 1), group: 'house' });
+          if (current.type === 'pileRow') {
+            const normalized = normalizePileRowToPerimeter({ ...line, name: `Ряд ${next.pileRows.length + 1}`, count: Math.max(2, Math.ceil(distance / 2.5) + 1), group: 'house' }, next);
+            if (normalized) next.pileRows.push(normalized);
+          }
           if (current.type === 'bindingLine') next.bindingLines.push({ ...line, name: `Обвязка ${next.bindingLines.length + 1}`, group: 'house', include: true });
         });
         selectCreated({ type: current.type, id });
@@ -612,6 +625,103 @@ const MOBILE_TOOLS = [
 
 const roundDisplay = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
+
+function pilePerimeterSegments(plan) {
+  const houseW = Number(plan.house?.w) || 0;
+  const houseH = Number(plan.house?.h) || 0;
+  const segments = [
+    { axis: 'h', fixed: 0, start: 0, end: houseW, group: 'house' },
+    { axis: 'h', fixed: houseH, start: 0, end: houseW, group: 'house' },
+    { axis: 'v', fixed: 0, start: 0, end: houseH, group: 'house' },
+    { axis: 'v', fixed: houseW, start: 0, end: houseH, group: 'house' }
+  ];
+  (plan.platforms || []).filter((platform) => platform?.include !== false).forEach((platform) => {
+    const x = Number(platform.x) || 0;
+    const y = Number(platform.y) || 0;
+    const w = Number(platform.w) || 0;
+    const h = Number(platform.h) || 0;
+    const group = platform.kind || 'platform';
+    segments.push(
+      { axis: 'h', fixed: y, start: x, end: x + w, group },
+      { axis: 'h', fixed: y + h, start: x, end: x + w, group },
+      { axis: 'v', fixed: x, start: y, end: y + h, group },
+      { axis: 'v', fixed: x + w, start: y, end: y + h, group }
+    );
+  });
+  return segments.filter((segment) => segment.end - segment.start >= 0.2);
+}
+
+function distanceToPileSegment(point, segment) {
+  const along = segment.axis === 'v' ? point.y : point.x;
+  const across = segment.axis === 'v' ? point.x : point.y;
+  const projected = Math.max(segment.start, Math.min(segment.end, along));
+  return Math.hypot(across - segment.fixed, along - projected);
+}
+
+function normalizePileRowToPerimeter(row, plan) {
+  const segments = pilePerimeterSegments(plan);
+  if (!segments.length) return row;
+  const startPoint = { x: Number(row.x1) || 0, y: Number(row.y1) || 0 };
+  const endPoint = { x: Number(row.x2) || 0, y: Number(row.y2) || 0 };
+  const tolerance = 0.42;
+  const segment = segments
+    .map((candidate) => ({ candidate, score: distanceToPileSegment(startPoint, candidate) + distanceToPileSegment(endPoint, candidate) }))
+    .filter(({ candidate }) => distanceToPileSegment(startPoint, candidate) <= tolerance && distanceToPileSegment(endPoint, candidate) <= tolerance)
+    .sort((left, right) => left.score - right.score)[0]?.candidate;
+  if (!segment) return null;
+
+  const coords = [segment.start, segment.end];
+  const addCoord = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return;
+    if (numeric < segment.start - 0.04 || numeric > segment.end + 0.04) return;
+    if (!coords.some((item) => Math.abs(item - numeric) <= 0.02)) coords.push(roundCoord(numeric));
+  };
+  (plan.piles || []).forEach((pile) => {
+    const onSegment = segment.axis === 'h'
+      ? Math.abs((Number(pile.y) || 0) - segment.fixed) <= 0.04
+      : Math.abs((Number(pile.x) || 0) - segment.fixed) <= 0.04;
+    if (onSegment) addCoord(segment.axis === 'h' ? pile.x : pile.y);
+  });
+  (plan.pileRows || []).forEach((source) => {
+    if (source.id === row.id) return;
+    const sameAxis = Math.abs((segment.axis === 'h' ? Number(source.y1) || 0 : Number(source.x1) || 0) - segment.fixed) <= 0.04
+      && Math.abs((segment.axis === 'h' ? Number(source.y2) || 0 : Number(source.x2) || 0) - segment.fixed) <= 0.04;
+    if (!sameAxis) return;
+    addCoord(segment.axis === 'h' ? source.x1 : source.y1);
+    addCoord(segment.axis === 'h' ? source.x2 : source.y2);
+    const count = Math.max(2, Math.round(Number(source.count) || 2));
+    for (let index = 0; index < count; index += 1) {
+      const ratio = count === 1 ? 0 : index / (count - 1);
+      const point = segment.axis === 'h'
+        ? (Number(source.x1) || 0) + ((Number(source.x2) || 0) - (Number(source.x1) || 0)) * ratio
+        : (Number(source.y1) || 0) + ((Number(source.y2) || 0) - (Number(source.y1) || 0)) * ratio;
+      addCoord(point);
+    }
+  });
+  coords.sort((left, right) => left - right);
+
+  const project = (point) => segment.axis === 'h'
+    ? Math.max(segment.start, Math.min(segment.end, Number(point.x) || 0))
+    : Math.max(segment.start, Math.min(segment.end, Number(point.y) || 0));
+  const snapCoord = (value) => coords.reduce((best, item) => Math.abs(item - value) < Math.abs(best - value) ? item : best, coords[0]);
+
+  let startCoord = snapCoord(project(startPoint));
+  let endCoord = snapCoord(project(endPoint));
+  if (Math.abs(startCoord - endCoord) < 0.05) {
+    const ascending = project(startPoint) <= project(endPoint);
+    startCoord = ascending ? segment.start : segment.end;
+    endCoord = ascending ? segment.end : segment.start;
+  }
+
+  const normalized = segment.axis === 'h'
+    ? { ...row, x1: roundCoord(startCoord), y1: roundCoord(segment.fixed), x2: roundCoord(endCoord), y2: roundCoord(segment.fixed) }
+    : { ...row, x1: roundCoord(segment.fixed), y1: roundCoord(startCoord), x2: roundCoord(segment.fixed), y2: roundCoord(endCoord) };
+  if (Math.hypot(normalized.x2 - normalized.x1, normalized.y2 - normalized.y1) < 0.2) return null;
+  normalized.group = segment.group;
+  return normalized;
+}
+
 function MobileStepper({ label, value, onMinus, onPlus, suffix = 'м' }) {
   const display = suffix === 'шт' ? Math.round(Number(value) || 0) : roundDisplay(value).toFixed(2);
   return <div className="mobile-plan-stepper"><span>{label}</span><div><button type="button" onClick={onMinus} aria-label={`Уменьшить ${label}`}><Minus /></button><strong>{display} {suffix}</strong><button type="button" onClick={onPlus} aria-label={`Увеличить ${label}`}><Plus /></button></div></div>;
@@ -680,7 +790,7 @@ function MobileSelectionAdjuster({ plan, selected, commitPlan, setSelected, metr
     if (selected.type === 'platform') { const item = (next.platforms || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); Object.assign(item, normalizeTerracePlatform(item)); Object.assign(item, snapPlatformToHouse(item, next.house)); } return; }
     if (selected.type === 'pile' || selected.type === 'gap') { const key = selected.type === 'pile' ? 'piles' : 'wallGaps'; const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x = roundCoord(item.x + dx); item.y = roundCoord(item.y + dy); } return; }
     const key = selected.type === 'wall' ? 'walls' : selected.type === 'bindingLine' ? 'bindingLines' : selected.type === 'dimension' ? 'dimensions' : selected.type === 'pileRow' ? 'pileRows' : null;
-    if (key) { const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x1 = roundCoord(item.x1 + dx); item.y1 = roundCoord(item.y1 + dy); item.x2 = roundCoord(item.x2 + dx); item.y2 = roundCoord(item.y2 + dy); } }
+    if (key) { const item = (next[key] || []).find((candidate) => candidate.id === selected.id); if (item) { item.x1 = roundCoord(item.x1 + dx); item.y1 = roundCoord(item.y1 + dy); item.x2 = roundCoord(item.x2 + dx); item.y2 = roundCoord(item.y2 + dy); if (selected.type === 'pileRow') { const normalized = normalizePileRowToPerimeter(item, next); if (normalized) Object.assign(item, normalized); } } }
   });
   const stopNudgeRepeat = () => {
     window.clearTimeout(nudgeRepeatRef.current.timeout); window.clearInterval(nudgeRepeatRef.current.interval);
@@ -883,9 +993,9 @@ export default function PlanScreen({ onNavigate }) {
     const dx = event.clientX - start.x; const dy = event.clientY - start.y;
     if (Math.abs(dx) < Math.abs(dy) || Math.abs(dx) < 28) return;
     if (dx < 0) setToolRailCollapsed(true);
-    if (dx > 0) setToolRailCollapsed(false);
+    if (dx > 18) setToolRailCollapsed(false);
   };
-  const toolHint = tool === 'select' ? 'Один палец — выбрать/править. Два пальца — только масштаб и перемещение поля.' : tool === 'room' ? 'Коснитесь первого угла и тяните. Край комнаты сам прилипнет к наружной стене, перегородке, узлу или сетке — миллиметры ловить не нужно.' : tool === 'polygon' ? 'Ставьте углы комнаты. Узлы магнитятся к стенам и сетке. После третьей точки нажмите первую точку.' : tool === 'dimension' ? 'Нажмите первую точку, затем вторую. Размер привяжется к узлам и сетке.' : tool === 'pileRow' ? 'Первый конец начинается под пальцем. Второй идёт за пальцем 1:1; возле узла или оси включается магнит.' : tool === 'bindingLine' ? 'Начало и конец идут за пальцем; возле стен и узлов включается магнитная привязка.' : ['window','door','gap','pile'].includes(tool) ? 'Нажмите точное место установки. Проём выбирает ближайшую стену по месту касания.' : 'Рисуйте пальцем. Магнит включается только рядом со стеной, узлом или осью.';
+  const toolHint = tool === 'select' ? 'Один палец — выбрать/править. Два пальца — только масштаб и перемещение поля.' : tool === 'room' ? 'Коснитесь первого угла и тяните. Край комнаты сам прилипнет к наружной стене, перегородке, узлу или сетке — миллиметры ловить не нужно.' : tool === 'polygon' ? 'Ставьте углы комнаты. Узлы магнитятся к стенам и сетке. После третьей точки нажмите первую точку.' : tool === 'dimension' ? 'Нажмите первую точку, затем вторую. Размер привяжется к узлам и сетке.' : tool === 'pileRow' ? 'Ряд свай ставится только по наружным стенам, террасам и крыльцу. Потяните вдоль нужной стороны — ряд прилипнет к узлам и углам.' : tool === 'bindingLine' ? 'Начало и конец идут за пальцем; возле стен и узлов включается магнитная привязка.' : ['window','door','gap','pile'].includes(tool) ? 'Нажмите точное место установки. Проём выбирает ближайшую стену по месту касания.' : 'Рисуйте пальцем. Магнит включается только рядом со стеной, узлом или осью.';
   const mobileEditor = <div className={`mobile-plan-fullscreen ${gridVisible ? '' : 'grid-hidden'}`}>
     <div className="mobile-release-badge" aria-label={`Версия ${MOBILE_RELEASE_LABEL}`}>{MOBILE_RELEASE_LABEL}</div>
     <div className="mobile-plan-top-controls">

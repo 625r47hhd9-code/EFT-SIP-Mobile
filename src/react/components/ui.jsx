@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ChevronDown, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { formatMoney, formatNumber } from '../utils/format.js';
 import { isPriceEditorUnlocked } from '../security/price-access.js';
@@ -8,10 +8,49 @@ export function Field({ label, hint, children, className = '' }) {
 }
 
 export function NumberField({ label, value, onChange, min = 0, max, step = 0.1, suffix, hint, disabled }) {
+  const format = (source) => {
+    const next = Number(source);
+    return Number.isFinite(next) ? String(source) : '0';
+  };
+  const [draft, setDraft] = useState(() => format(value));
+
+  useEffect(() => {
+    setDraft(format(value));
+  }, [value]);
+
+  const commitDraft = (source) => {
+    if (source === '' || source == null) {
+      const fallback = Number.isFinite(Number(value)) ? Number(value) : Number(min) || 0;
+      setDraft(String(fallback));
+      onChange(fallback);
+      return;
+    }
+    const numeric = Number(source);
+    if (!Number.isFinite(numeric)) return;
+    const clamped = max == null ? Math.max(min, numeric) : Math.min(max, Math.max(min, numeric));
+    setDraft(String(clamped));
+    onChange(clamped);
+  };
+
   return (
     <Field label={label} hint={hint}>
       <div className="input-with-suffix">
-        <input type="number" value={Number.isFinite(Number(value)) ? value : 0} min={min} max={max} step={step} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} />
+        <input
+          type="number"
+          value={draft}
+          min={min}
+          max={max}
+          step={step}
+          disabled={disabled}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDraft(next);
+            if (next === '' || next === '-' || next === '.' || next === '-.') return;
+            const numeric = Number(next);
+            if (Number.isFinite(numeric)) onChange(numeric);
+          }}
+          onBlur={(event) => commitDraft(event.target.value)}
+        />
         {suffix ? <em>{suffix}</em> : null}
       </div>
     </Field>

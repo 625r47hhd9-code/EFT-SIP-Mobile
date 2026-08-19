@@ -646,10 +646,11 @@ function RafterSystemEditor({ project, calculation, setRoof }) {
   const lathStep=Math.max(.1,Number(roof.lathStep)||.35);
   const setLathStep=(delta)=>setRoof('lathStep',clamp(Math.round((lathStep+delta)*100)/100,.1,1.2));
   return <div className="rafter-editor-shell m791-roof-editor">
-    <Panel title="Стропильная система" description="Сначала выбирается несущая схема, затем шаг, сечение и высота. Схема ниже обновляется сразу.">
+    <article className="rafter-drawing-card clean-rafter-drawing"><header><div><h2>{system==='truss'?'Стропильная ферма':system==='layered'?'Наслонная система':'Висячая система'}</h2><p>Первая плитка — схема конструкции. После неё идут параметры.</p></div><strong>{section.replace('x','×')} мм · {Math.round(step*1000)} мм</strong></header><RafterSectionDrawing system={system} section={section} span={span} ridgeHeight={ridgeHeight} ceilingThickness={project.settings.sip.ceilingThickness} eaveOverhang={roof.eaveOverhang}/></article>
+    <Panel title="Стропильная система" description="После схемы выбираются система, шаг, сечение и высота.">
       <div className="rafter-auto-row"><button type="button" className={automatic?'active':''} onClick={()=>setRoof('structureMode',automatic?'manual':'auto')}><Settings2/><span><strong>Автоматический подбор</strong><small>{automatic?'до 8 м — висячая; больше 8 м или с внутренней опорой — наслонная':'ручная настройка'}</small></span><i className={automatic?'on':''}/></button></div>
       <div className="form-grid two rafter-select-row">
-        <SelectField label="Система" value={system} onChange={setSystem} options={[{value:'hanging',label:'Висячая'},{value:'layered',label:'Наслонная'},{value:'truss',label:'Ферма'}]} />
+        <SelectField label="Система" value={system} onChange={setSystem} options={[{value:'truss',label:'Ферма'},{value:'hanging',label:'Висячая'},{value:'layered',label:'Наслонная'}]} />
         <SelectField label="Направление конька" value={roof.ridgeDirection||'length'} onChange={(value)=>setRoof('ridgeDirection',value)} options={[{value:'length',label:'Вдоль длины дома'},{value:'width',label:'Вдоль ширины дома'}]} />
       </div>
       <div className="roof-step-grid">
@@ -659,9 +660,9 @@ function RafterSystemEditor({ project, calculation, setRoof }) {
         <div className="roof-step-control static"><div><span>Внутренняя несущая опора</span><strong>{hasBearingSupport?'Есть':'Нет'}</strong></div></div>
       </div>
     </Panel>
-    <article className="rafter-drawing-card clean-rafter-drawing"><header><div><h2>{system==='truss'?'Стропильная ферма':system==='layered'?'Наслонная система':'Висячая система'}</h2><p>Чистая конструктивная схема без служебных подписей на рисунке</p></div><strong>{section.replace('x','×')} мм · {Math.round(step*1000)} мм</strong></header><RafterSectionDrawing system={system} section={section} span={span} ridgeHeight={ridgeHeight} ceilingThickness={project.settings.sip.ceilingThickness} eaveOverhang={roof.eaveOverhang}/></article>
 
-    <Panel title="Обрешётка" description="Идёт следующим блоком по ходу прокрутки. Настройка шага и доски без переключения плиток.">
+    <article className="rafter-drawing-card lath-card clean-lath-drawing"><header><div><h2>Схема обрешётки</h2><p>Первая плитка блока — схема сверху, затем ниже идут параметры.</p></div><strong>{lathSection.replace('x','×')} мм · {Math.round(lathStep*1000)} мм</strong></header><LathDrawing roof={roof} calculation={calculation}/></article>
+    <Panel title="Обрешётка" description="После схемы можно менять шаг и доску без лишних переключений.">
       <div className="roof-step-grid">
         <StepControl label="Шаг обрешётки" value={`${Math.round(lathStep*1000)} мм`} onDown={()=>setLathStep(-.05)} onUp={()=>setLathStep(.05)}/>
         <StepControl label="Доска обрешётки" value={`${lathSection.replace('x','×')} мм`} onDown={()=>cycleLath(-1)} onUp={()=>cycleLath(1)}/>
@@ -669,7 +670,6 @@ function RafterSystemEditor({ project, calculation, setRoof }) {
         <div className="roof-step-control static"><div><span>Расчётная длина</span><strong>{formatNumber(calculation.roof.mainLathRequiredLength||0)} м.п.</strong></div></div>
       </div>
     </Panel>
-    <article className="rafter-drawing-card lath-card clean-lath-drawing"><header><div><h2>Схема обрешётки</h2><p>Вид сверху: стропила подложкой, обрешётка поперёк ската</p></div><strong>{lathSection.replace('x','×')} мм · {Math.round(lathStep*1000)} мм</strong></header><LathDrawing roof={roof} calculation={calculation}/></article>
   </div>;
 }
 
@@ -714,7 +714,7 @@ export default function VisualizationScreen() {
   return (
     <section className="visualization-screen engineering-visualization m771-visualization">
       <div className="mobile-screen-intro visualization-intro">
-        <span className="eyebrow">Инженерная визуализация · 7.9.1</span>
+        <span className="eyebrow">Инженерная визуализация · 7.9.2</span>
         <h1>3D-вид, план и стропильная система</h1><p>Рабочая визуализация проекта.</p>
       </div>
 
@@ -759,7 +759,7 @@ export default function VisualizationScreen() {
           <div className="visual-stage-actions">
             <button type="button" className={cutaway ? 'active' : ''} onClick={() => setCutaway((current) => !current)}>
               <Eye />
-              <span>{cutaway ? 'Открытый вид' : 'Все стены'}</span>
+              <span>{cutaway ? 'Все стены' : 'Срез стен'}</span>
             </button>
             <button type="button" className={showLayers ? 'active' : ''} onClick={() => setShowLayers((current) => !current)}>
               <Layers3 />
