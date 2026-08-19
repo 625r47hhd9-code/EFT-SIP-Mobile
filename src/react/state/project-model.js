@@ -146,7 +146,7 @@ export function createDefaultProject() {
       internal: { wallArea: 300, ceilingArea: 72, laminateArea: 75, tileArea: 30, doors: 5 },
       external: { facadeArea: 130, windArea: 100, insulationArea: 110, woodArea: 40, metalArea: 120, soffitArea: 63, cornerLength: 14 },
       print: { includePlan: true, includeRoof: false, showPiles: true, showBinding: true, showDimensions: true },
-      visual: { exteriorWallSystem: 'sip', interiorWallSystem: 'frame' },
+      visual: { exteriorWallSystem: 'sip', interiorWallSystem: 'frame', showWindows: true, showExteriorDoors: true, showInteriorDoors: true },
       links: clone(DEFAULT_LINKS),
       formulas: clone(DEFAULT_FORMULAS)
     },

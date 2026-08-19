@@ -317,13 +317,14 @@ function HouseModel({ project, calculation, roofHidden, quarter, cutaway, layers
   const floor = face([[0,0,0],[dims.w,0,0],[dims.w,dims.h,0],[0,dims.h,0]],dims,quarter);
   const exterior=['north','east','south','west'].map(side=>({side,depth:avgDepth(face(sideFace(side,dims.w,dims.h,wallHeight),dims,quarter))})).sort((a,b)=>a.depth-b.depth);
   const partitions=unifiedWallSegments(plan).filter(segment=>segment.axis!=='d');
-  const exteriorOpenings=(plan.openings||[]).filter(opening=>opening.outer!==false);
-  const interiorOpenings=(plan.openings||[]).filter(opening=>opening.type==='door'&&opening.outer===false);
+  const visualSettings = project.settings.visual || {};
+  const exteriorOpenings=(plan.openings||[]).filter((opening)=>opening.outer!==false && (opening.type==='window' ? visualSettings.showWindows !== false : visualSettings.showExteriorDoors !== false));
+  const interiorOpenings=(plan.openings||[]).filter((opening)=>opening.type==='door'&&opening.outer===false && visualSettings.showInteriorDoors !== false);
   const roomPolys=(plan.rooms||[]).filter(room=>room.include!==false);
   const platforms=(plan.platforms||[]).filter(item=>item.include!==false);
   const partitionThickness=Number(plan.partitionThickness)||.1;
-  const exteriorSystem=project.settings.visual?.exteriorWallSystem||'sip';
-  const interiorSystem=project.settings.visual?.interiorWallSystem||'frame';
+  const exteriorSystem=visualSettings.exteriorWallSystem||'sip';
+  const interiorSystem=visualSettings.interiorWallSystem||'frame';
   return <svg className="house-visual-svg engineering-model polished-house-model m790-house" viewBox="0 0 780 570" role="img" aria-label="Трёхмерная визуализация дома">
     <defs>
       <pattern id="osbWallTexture" width="34" height="24" patternUnits="userSpaceOnUse"><rect width="34" height="24" fill="#f2e6cf"/><path d="M2 6l9-3m-4 12l12-5m2-7l8 4m-10 10l11-3M1 21l7-5M25 2l6 3" stroke="#c6a370" strokeWidth="1.1" opacity=".34"/></pattern>
@@ -375,7 +376,12 @@ function PlanPreview({ project, metrics }) {
   const width = Number(plan.house?.w) || 8;
   const height = Number(plan.house?.h) || 10;
   const platforms = (plan.platforms || []).filter((item) => item.include !== false);
-  const openings = plan.openings || [];
+  const visualSettings = project.settings.visual || {};
+  const openings = (plan.openings || []).filter((opening) => {
+    if (opening.type === 'window') return visualSettings.showWindows !== false;
+    if (opening.outer === false) return visualSettings.showInteriorDoors !== false;
+    return visualSettings.showExteriorDoors !== false;
+  });
   const svgWidth = 820;
   const svgHeight = 610;
   const dimensionMargin = 0.95;
@@ -483,7 +489,12 @@ function PlanReadout({ project, metrics }) {
   const plan = project.plan;
   const rooms = (plan.rooms || []).filter((room) => room.include !== false);
   const platforms = (plan.platforms || []).filter((item) => item.include !== false);
-  const openings = plan.openings || [];
+  const visualSettings = project.settings.visual || {};
+  const openings = (plan.openings || []).filter((opening) => {
+    if (opening.type === 'window') return visualSettings.showWindows !== false;
+    if (opening.outer === false) return visualSettings.showInteriorDoors !== false;
+    return visualSettings.showExteriorDoors !== false;
+  });
   return (
     <>
       <Panel title="Характеристики плана" description="Это обзорный план рядом с 3D, без редактирования. Все размеры и площади берутся из основного редактора.">
@@ -650,15 +661,39 @@ function RafterSectionDrawing({ system, section, span, ridgeHeight, wallHeight =
 }
 
 function LathDrawing({ roof, calculation }) {
-  const step=Math.max(.1,Number(roof.lathStep)||.35);
-  const count=clamp(Math.round(3.5/step),5,18);
-  const rafters=10;
-  return <svg viewBox="0 0 820 400" className="lath-plan-svg m791-lath-plan" role="img" aria-label="Схема обрешётки сверху">
-    <defs><pattern id="roofGrid791" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#eef1e8" strokeWidth="1"/></pattern></defs>
-    <rect width="820" height="400" fill="url(#roofGrid791)"/><rect x="72" y="54" width="676" height="286" rx="4" className="lath-roof-outline"/>
-    <line x1="410" y1="54" x2="410" y2="340" className="lath-ridge"/>
-    {Array.from({length:rafters},(_,i)=>{const x=94+i*(632/(rafters-1));return <line key={`r-${i}`} x1={x} y1="64" x2={x} y2="330" className="lath-rafter-under"/>})}
-    {Array.from({length:count},(_,i)=>{const y=72+i*(250/Math.max(1,count-1));return <line key={`l-${i}`} x1="82" y1={y} x2="738" y2={y} className="lath-board-line"/>})}
+  const step = Math.max(.1, Number(roof.lathStep) || .35);
+  const count = clamp(Math.round(3.8 / step), 6, 16);
+  const leftSlope = '154,88 404,56 404,332 108,362';
+  const rightSlope = '416,56 666,88 712,362 416,332';
+  const lathRows = Array.from({ length: count }, (_, i) => 94 + i * (234 / Math.max(1, count - 1)));
+  const boardCount = calculation?.roof?.mainLathBoardCount || 0;
+  return <svg viewBox="0 0 820 420" className="lath-plan-svg m791-lath-plan clearer-lath-plan" role="img" aria-label="Наглядная схема обрешётки">
+    <defs>
+      <pattern id="roofGrid791" width="22" height="22" patternUnits="userSpaceOnUse"><path d="M22 0H0V22" fill="none" stroke="#eef1e8" strokeWidth="1"/></pattern>
+      <clipPath id="clipLathLeft"><polygon points={leftSlope} /></clipPath>
+      <clipPath id="clipLathRight"><polygon points={rightSlope} /></clipPath>
+    </defs>
+    <rect width="820" height="420" fill="url(#roofGrid791)"/>
+    <rect x="58" y="44" width="704" height="332" rx="22" className="lath-card-shell"/>
+    <polygon points={leftSlope} className="lath-roof-slope"/>
+    <polygon points={rightSlope} className="lath-roof-slope second"/>
+    <line x1="410" y1="54" x2="410" y2="336" className="lath-ridge"/>
+    <g className="lath-rafter-pack" clipPath="url(#clipLathLeft)">
+      {Array.from({ length: 7 }, (_, i) => {
+        const x = 168 + i * 34;
+        return <line key={`lr-${i}`} x1={x} y1="80" x2={x - 34} y2="356" className="lath-rafter-under" />;
+      })}
+    </g>
+    <g className="lath-rafter-pack" clipPath="url(#clipLathRight)">
+      {Array.from({ length: 7 }, (_, i) => {
+        const x = 456 + i * 34;
+        return <line key={`rr-${i}`} x1={x} y1="80" x2={x + 34} y2="356" className="lath-rafter-under" />;
+      })}
+    </g>
+    <g clipPath="url(#clipLathLeft)">{lathRows.map((y, i) => <line key={`ll-${i}`} x1="118" y1={y} x2="404" y2={y - 24} className="lath-board-line" />)}</g>
+    <g clipPath="url(#clipLathRight)">{lathRows.map((y, i) => <line key={`rl-${i}`} x1="416" y1={y - 24} x2="702" y2={y} className="lath-board-line" />)}</g>
+    <line x1="118" y1="362" x2="702" y2="362" className="lath-eave-line"/>
+    <text x="410" y="400" className="lath-dim-text">Шаг обрешётки {Math.round(step * 1000)} мм · всего {boardCount} досок по 6 м</text>
   </svg>;
 }
 
@@ -736,8 +771,13 @@ export default function VisualizationScreen() {
 
   const calculation = useMemo(() => calculateProject(project), [project]);
   const metrics = useMemo(() => calculatePlanMetrics(project.plan), [project.plan]);
+  const visualSettings = project.settings.visual || {};
 
   const toggleLayer = (key) => setLayers((current) => ({ ...current, [key]: !current[key] }));
+  const toggleVisualSetting = (key) => commit((next) => {
+    next.settings.visual[key] = next.settings.visual[key] === false;
+    return next;
+  });
   const setRoof = (key, value) => commit((next) => {
     next.settings.roof[key] = value;
     return next;
@@ -751,7 +791,7 @@ export default function VisualizationScreen() {
   return (
     <section className="visualization-screen engineering-visualization m771-visualization">
       <div className="mobile-screen-intro visualization-intro">
-        <span className="eyebrow">Инженерная визуализация · 7.9.3</span>
+        <span className="eyebrow">Инженерная визуализация · 7.9.4</span>
         <h1>3D-вид, план и стропильная система</h1><p>Рабочая визуализация проекта.</p>
       </div>
 
@@ -822,6 +862,17 @@ export default function VisualizationScreen() {
               ['foundation', 'Сваи']
             ].map(([key, label]) => (
               <button key={key} type="button" className={layers[key] ? 'on' : ''} onClick={() => toggleLayer(key)}>
+                <span>{label}</span>
+                <i />
+              </button>
+            ))}
+            <span className="visual-layer-divider">Проёмы</span>
+            {[
+              ['showWindows', 'Окна'],
+              ['showExteriorDoors', 'Входные двери'],
+              ['showInteriorDoors', 'Межкомнатные двери']
+            ].map(([key, label]) => (
+              <button key={key} type="button" className={visualSettings[key] !== false ? 'on' : ''} onClick={() => toggleVisualSetting(key)}>
                 <span>{label}</span>
                 <i />
               </button>

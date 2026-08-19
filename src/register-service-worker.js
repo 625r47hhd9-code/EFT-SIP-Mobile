@@ -1,4 +1,4 @@
-const RELEASE = 'm7.9.3';
+const RELEASE = 'm7.9.4';
 
 export function registerFreshServiceWorker() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;

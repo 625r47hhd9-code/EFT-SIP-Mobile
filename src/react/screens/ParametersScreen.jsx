@@ -152,7 +152,7 @@ export default function ParametersScreen() {
   return (
     <div className="screen parameters-screen-v3">
       <div className="all-params-intro">
-        <span className="eyebrow">Полная проверка проекта · 7.9.3</span>
+        <span className="eyebrow">Полная проверка проекта · 7.9.4</span>
         <h1>Все параметры дома</h1>
         <p>Один последовательный экран. Прокручивайте сверху вниз и проверяйте проект по разделам: от габаритов и фундамента до инженерии, отделки, доставки и расчётных связей.</p>
       </div>
@@ -220,7 +220,12 @@ export default function ParametersScreen() {
             <SelectField label="Наружные стены в 3D" value={project.settings.visual?.exteriorWallSystem || 'sip'} onChange={(value) => updateSetting('visual', 'exteriorWallSystem', value)} options={[{value:'sip',label:'СИП-панели'},{value:'frame',label:'Каркас'}]} />
             <SelectField label="Внутренние стены в 3D" value={project.settings.visual?.interiorWallSystem || 'frame'} onChange={(value) => updateSetting('visual', 'interiorWallSystem', value)} options={[{value:'sip',label:'СИП-панели'},{value:'frame',label:'Каркас'}]} />
           </div>
-          <p className="all-params-hint">Тип наружных и внутренних стен управляет отображением в 3D. Расчёт материалов по-прежнему определяется составом проекта и параметрами конструкций.</p>
+          <div className="all-params-toggle-grid">
+            <Toggle label="Показывать окна" checked={project.settings.visual?.showWindows !== false} onChange={(value) => updateSetting('visual', 'showWindows', value)} />
+            <Toggle label="Показывать входные двери" checked={project.settings.visual?.showExteriorDoors !== false} onChange={(value) => updateSetting('visual', 'showExteriorDoors', value)} />
+            <Toggle label="Показывать межкомнатные двери" checked={project.settings.visual?.showInteriorDoors !== false} onChange={(value) => updateSetting('visual', 'showInteriorDoors', value)} />
+          </div>
+          <p className="all-params-hint">Тип наружных и внутренних стен управляет отображением в 3D. Ниже можно отдельно скрывать окна, входные и межкомнатные двери: проёмы и расчёт по проекту сохраняются, но сами элементы не показываются.</p>
         </Section>
 
         <Section number={5} title="Стропильная система и кровля" subtitle="Несущая схема, геометрия скатов, обрешётка и доборные элементы" icon={Hammer}>
