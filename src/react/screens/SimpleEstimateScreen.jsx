@@ -56,7 +56,7 @@ export default function SimpleEstimateScreen() {
         <div><span>Работы</span><strong>{formatMoney(calculation.totals.labor)}</strong></div>
         <div className="grand"><span>Итого</span><strong>{formatMoney(calculation.totals.total)}</strong></div>
       </section>
-      <footer><span>ЭФТ · Мобильный калькулятор · версия 7.9.2</span><span>{project.meta.date || ''}</span></footer>
+      <footer><span>ЭФТ · Мобильный калькулятор · версия 7.9.3</span><span>{project.meta.date || ''}</span></footer>
     </article>
   </section>;
 }

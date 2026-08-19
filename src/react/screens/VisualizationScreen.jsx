@@ -545,12 +545,24 @@ function PlanReadout({ project, metrics }) {
 }
 
 function RafterMini({ type }) {
-  return <svg viewBox="0 0 130 64" className="rafter-mini" aria-hidden="true">
-    <rect x="16" y="48" width="98" height="6" rx="2" className="mini-sip" />
-    <line x1="8" y1="49" x2="65" y2="10"/><line x1="65" y1="10" x2="122" y2="49"/>
-    {type==='hanging'?<line x1="38" y1="31" x2="92" y2="31"/>:null}
-    {type==='layered'?<><line x1="65" y1="12" x2="65" y2="48"/><line x1="65" y1="47" x2="39" y2="31"/><line x1="65" y1="47" x2="91" y2="31"/></>:null}
-    {type==='truss'?<><line x1="18" y1="48" x2="112" y2="48"/><line x1="65" y1="10" x2="65" y2="48"/><line x1="65" y1="48" x2="39" y2="31"/><line x1="65" y1="48" x2="91" y2="31"/></>:null}
+  return <svg viewBox="0 0 130 78" className="rafter-mini" aria-hidden="true">
+    <rect x="18" y="40" width="94" height="8" rx="2" className="mini-sip" />
+    <rect x="10" y="48" width="20" height="14" className="mini-wall" />
+    <rect x="100" y="48" width="20" height="14" className="mini-wall" />
+    <rect x="14" y="36" width="20" height="5" rx="1.5" className="mini-mauerlat" />
+    <rect x="96" y="36" width="20" height="5" rx="1.5" className="mini-mauerlat" />
+    <line x1="10" y1="44" x2="65" y2="11"/><line x1="65" y1="11" x2="120" y2="44"/>
+    {type==='hanging' ? <line x1="39" y1="28" x2="91" y2="28"/> : null}
+    {type==='layered' ? <>
+      <rect x="56" y="35" width="18" height="5" rx="1.5" className="mini-mauerlat" />
+      <line x1="65" y1="36" x2="65" y2="11"/>
+      <line x1="65" y1="36" x2="40" y2="28"/><line x1="65" y1="36" x2="90" y2="28"/>
+    </> : null}
+    {type==='truss' ? <>
+      <line x1="18" y1="36" x2="112" y2="36"/>
+      <line x1="65" y1="36" x2="65" y2="11"/>
+      <line x1="65" y1="36" x2="40" y2="28"/><line x1="65" y1="36" x2="90" y2="28"/>
+    </> : null}
   </svg>;
 }
 
@@ -564,51 +576,76 @@ function StepControl({ label, value, note, onDown, onUp, disabled = false }) {
   </div>;
 }
 
-function RafterSectionDrawing({ system, section, span, ridgeHeight, ceilingThickness, eaveOverhang }) {
-  const W=820,H=470;
-  const lx=160,rx=660,cx=410;
-  const ceilingTop=360, ceilingH=30;
-  const rise=clamp(130+ridgeHeight*25,145,205), ry=ceilingTop-rise;
-  const eavePx=clamp(22+(Number(eaveOverhang)||0)*30,26,52);
-  const le=lx-eavePx,re=rx+eavePx;
-  const lm={x:(le+cx)/2,y:(ceilingTop+ry)/2};
-  const rm={x:(re+cx)/2,y:(ceilingTop+ry)/2};
-  const midY=ry+(ceilingTop-ry)*.52;
-  const beamY=ceilingTop-11;
+function RafterSectionDrawing({ system, section, span, ridgeHeight, wallHeight = 2.5, ceilingThickness, eaveOverhang }) {
+  const W = 820, H = 470;
+  const lx = 158, rx = 662, cx = 410;
+  const panelTop = 324;
+  const panelH = 28;
+  const panelBottom = panelTop + panelH;
+  const wallVisible = clamp(34 + wallHeight * 18, 62, 96);
+  const wallBottom = panelBottom + wallVisible;
+  const mauerlatY = panelTop - 14;
+  const mauerlatH = 12;
+  const supportY = mauerlatY + mauerlatH / 2;
+  const rise = clamp(118 + ridgeHeight * 24, 140, 200);
+  const ry = supportY - rise;
+  const eavePx = clamp(20 + (Number(eaveOverhang) || 0) * 26, 24, 48);
+  const le = lx - eavePx;
+  const re = rx + eavePx;
+  const halfSpan = span / 2;
+  const legLength = Math.sqrt(Math.max(0.01, halfSpan ** 2 + ridgeHeight ** 2));
+  const leftMid = { x: (lx + cx) / 2, y: (supportY + ry) / 2 };
+  const rightMid = { x: (rx + cx) / 2, y: (supportY + ry) / 2 };
+  const collarY = ry + (supportY - ry) * 0.52;
+  const centralSeatY = panelTop - 9;
+  const leftDimA = { x: lx - 28, y: supportY - 4 };
+  const leftDimB = { x: cx - 28, y: ry - 4 };
+  const slopeLabelX = (leftDimA.x + leftDimB.x) / 2 - 4;
+  const slopeLabelY = (leftDimA.y + leftDimB.y) / 2 - 6;
+  const slopeAngle = (-Math.atan2(leftDimA.y - leftDimB.y, leftDimB.x - leftDimA.x)) * 180 / Math.PI;
+
   return <svg viewBox={`0 0 ${W} ${H}`} className="rafter-section-svg m791-rafter-section" role="img" aria-label="Схема стропильной системы">
     <defs>
       <pattern id="sipCore791" width="18" height="12" patternUnits="userSpaceOnUse"><rect width="18" height="12" fill="#f3f0e7"/><path d="M0 6h18" stroke="#ded7c6"/><circle cx="4" cy="3" r="1" fill="#c9b99d"/><circle cx="13" cy="9" r="1" fill="#c9b99d"/></pattern>
     </defs>
     <rect width={W} height={H} className="rafter-paper"/>
     <g className="rafter-building-base">
-      <rect x={lx-16} y={ceilingTop} width={rx-lx+32} height={ceilingH} className="sip-ceiling-panel"/>
-      <rect x={lx-22} y={ceilingTop-2} width="10" height={ceilingH+4} className="sip-end-board"/>
-      <rect x={rx+12} y={ceilingTop-2} width="10" height={ceilingH+4} className="sip-end-board"/>
-      <rect x={lx-30} y={ceilingTop-68} width="58" height="68" className="sip-wall-support"/>
-      <rect x={rx-28} y={ceilingTop-68} width="58" height="68" className="sip-wall-support"/>
-      <rect x={lx-30} y={ceilingTop-16} width="60" height="14" rx="3" className="mauerlat-beam"/>
-      <rect x={rx-30} y={ceilingTop-16} width="60" height="14" rx="3" className="mauerlat-beam"/>
+      <rect x={lx - 18} y={panelTop} width={rx - lx + 36} height={panelH} className="sip-ceiling-panel"/>
+      <rect x={lx - 24} y={panelTop - 1} width="9" height={panelH + 2} className="sip-end-board"/>
+      <rect x={rx + 15} y={panelTop - 1} width="9" height={panelH + 2} className="sip-end-board"/>
+      <rect x={lx - 34} y={panelBottom} width="70" height={wallVisible} className="sip-wall-support"/>
+      <rect x={rx - 36} y={panelBottom} width="70" height={wallVisible} className="sip-wall-support"/>
+      <rect x={lx - 32} y={mauerlatY} width="64" height={mauerlatH} rx="3" className="mauerlat-beam"/>
+      <rect x={rx - 32} y={mauerlatY} width="64" height={mauerlatH} rx="3" className="mauerlat-beam"/>
     </g>
     <g className="rafter-timber">
-      <line x1={le} y1={ceilingTop+2} x2={cx} y2={ry}/><line x1={cx} y1={ry} x2={re} y2={ceilingTop+2}/>
-      {system==='hanging'?<line x1={lm.x-12} y1={midY} x2={rm.x+12} y2={midY} className="collar-beam"/>:null}
-      {system==='layered'?<>
-        <rect x={cx-34} y={beamY} width="68" height="13" rx="2" className="central-mauerlat"/>
-        <line x1={cx} y1={beamY} x2={cx} y2={ry} className="central-post"/>
-        <line x1={cx} y1={beamY} x2={lm.x} y2={lm.y} className="brace"/>
-        <line x1={cx} y1={beamY} x2={rm.x} y2={rm.y} className="brace"/>
-        <rect x={cx-10} y={ry-8} width="20" height="16" rx="2" className="ridge-beam-node"/>
-      </>:null}
-      {system==='truss'?<>
-        <line x1={lx} y1={ceilingTop-7} x2={rx} y2={ceilingTop-7} className="bottom-chord"/>
-        <line x1={cx} y1={ceilingTop-7} x2={cx} y2={ry} className="central-post"/>
-        <line x1={cx} y1={ceilingTop-7} x2={lm.x} y2={lm.y} className="brace"/>
-        <line x1={cx} y1={ceilingTop-7} x2={rm.x} y2={rm.y} className="brace"/>
-      </>:null}
+      <line x1={le} y1={supportY + 2} x2={cx} y2={ry}/><line x1={cx} y1={ry} x2={re} y2={supportY + 2}/>
+      {system === 'hanging' ? <line x1={leftMid.x - 16} y1={collarY} x2={rightMid.x + 16} y2={collarY} className="collar-beam"/> : null}
+      {system === 'layered' ? <>
+        <rect x={cx - 36} y={centralSeatY} width="72" height="12" rx="2" className="central-mauerlat"/>
+        <line x1={cx} y1={centralSeatY + 1} x2={cx} y2={ry} className="central-post"/>
+        <line x1={cx} y1={centralSeatY + 2} x2={leftMid.x} y2={leftMid.y} className="brace"/>
+        <line x1={cx} y1={centralSeatY + 2} x2={rightMid.x} y2={rightMid.y} className="brace"/>
+        <rect x={cx - 10} y={ry - 8} width="20" height="16" rx="2" className="ridge-beam-node"/>
+      </> : null}
+      {system === 'truss' ? <>
+        <line x1={lx} y1={centralSeatY + 1} x2={rx} y2={centralSeatY + 1} className="bottom-chord"/>
+        <line x1={cx} y1={centralSeatY + 1} x2={cx} y2={ry} className="central-post"/>
+        <line x1={cx} y1={centralSeatY + 1} x2={leftMid.x} y2={leftMid.y} className="brace"/>
+        <line x1={cx} y1={centralSeatY + 1} x2={rightMid.x} y2={rightMid.y} className="brace"/>
+      </> : null}
     </g>
-    <g className="rafter-overhang-visual"><line x1={le} y1={ceilingTop+16} x2={lx} y2={ceilingTop+16}/><line x1={rx} y1={ceilingTop+16} x2={re} y2={ceilingTop+16}/></g>
-    <line x1={lx} y1="428" x2={rx} y2="428" className="rafter-dim"/><text x={cx} y="449" className="rafter-dim-text">{formatNumber(span)} м</text>
-    <line x1="730" y1={ceilingTop} x2="730" y2={ry} className="rafter-dim"/><text x="748" y={(ceilingTop+ry)/2} className="rafter-dim-text vertical">{formatNumber(ridgeHeight)} м</text>
+    <g className="rafter-overhang-visual"><line x1={le} y1={supportY + 18} x2={lx} y2={supportY + 18}/><line x1={rx} y1={supportY + 18} x2={re} y2={supportY + 18}/></g>
+    <g className="rafter-annotations">
+      <line x1={lx} y1="434" x2={rx} y2="434" className="rafter-dim"/>
+      <text x={cx} y="456" className="rafter-dim-text">{formatNumber(span)} м</text>
+      <line x1="732" y1={panelBottom} x2="732" y2={wallBottom} className="rafter-dim"/>
+      <text x="754" y={(panelBottom + wallBottom) / 2} className="rafter-dim-text vertical">{formatNumber(wallHeight)} м</text>
+      <line x1={leftDimA.x} y1={leftDimA.y} x2={leftDimB.x} y2={leftDimB.y} className="rafter-dim"/>
+      <text x={slopeLabelX} y={slopeLabelY} transform={`rotate(${slopeAngle} ${slopeLabelX} ${slopeLabelY})`} className="rafter-dim-text slope">{formatNumber(legLength)} м</text>
+      <line x1="92" y1={supportY + 6} x2="92" y2={ry} className="rafter-dim light"/>
+      <text x="112" y={(supportY + ry) / 2} className="rafter-dim-text vertical light">{formatNumber(ridgeHeight)} м</text>
+    </g>
   </svg>;
 }
 
@@ -646,7 +683,7 @@ function RafterSystemEditor({ project, calculation, setRoof }) {
   const lathStep=Math.max(.1,Number(roof.lathStep)||.35);
   const setLathStep=(delta)=>setRoof('lathStep',clamp(Math.round((lathStep+delta)*100)/100,.1,1.2));
   return <div className="rafter-editor-shell m791-roof-editor">
-    <article className="rafter-drawing-card clean-rafter-drawing"><header><div><h2>{system==='truss'?'Стропильная ферма':system==='layered'?'Наслонная система':'Висячая система'}</h2><p>Первая плитка — схема конструкции. После неё идут параметры.</p></div><strong>{section.replace('x','×')} мм · {Math.round(step*1000)} мм</strong></header><RafterSectionDrawing system={system} section={section} span={span} ridgeHeight={ridgeHeight} ceilingThickness={project.settings.sip.ceilingThickness} eaveOverhang={roof.eaveOverhang}/></article>
+    <article className="rafter-drawing-card clean-rafter-drawing"><header><div><h2>{system==='truss'?'Стропильная ферма':system==='layered'?'Наслонная система':'Висячая система'}</h2><p>Первая плитка — схема конструкции. После неё идут параметры.</p></div><strong>{section.replace('x','×')} мм · {Math.round(step*1000)} мм</strong></header><RafterSectionDrawing system={system} section={section} span={span} ridgeHeight={ridgeHeight} wallHeight={project.plan.wallHeight || 2.5} ceilingThickness={project.settings.sip.ceilingThickness} eaveOverhang={roof.eaveOverhang}/></article>
     <Panel title="Стропильная система" description="После схемы выбираются система, шаг, сечение и высота.">
       <div className="rafter-auto-row"><button type="button" className={automatic?'active':''} onClick={()=>setRoof('structureMode',automatic?'manual':'auto')}><Settings2/><span><strong>Автоматический подбор</strong><small>{automatic?'до 8 м — висячая; больше 8 м или с внутренней опорой — наслонная':'ручная настройка'}</small></span><i className={automatic?'on':''}/></button></div>
       <div className="form-grid two rafter-select-row">
@@ -714,7 +751,7 @@ export default function VisualizationScreen() {
   return (
     <section className="visualization-screen engineering-visualization m771-visualization">
       <div className="mobile-screen-intro visualization-intro">
-        <span className="eyebrow">Инженерная визуализация · 7.9.2</span>
+        <span className="eyebrow">Инженерная визуализация · 7.9.3</span>
         <h1>3D-вид, план и стропильная система</h1><p>Рабочая визуализация проекта.</p>
       </div>
 

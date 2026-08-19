@@ -152,7 +152,7 @@ export default function ParametersScreen() {
   return (
     <div className="screen parameters-screen-v3">
       <div className="all-params-intro">
-        <span className="eyebrow">Полная проверка проекта · 7.9.2</span>
+        <span className="eyebrow">Полная проверка проекта · 7.9.3</span>
         <h1>Все параметры дома</h1>
         <p>Один последовательный экран. Прокручивайте сверху вниз и проверяйте проект по разделам: от габаритов и фундамента до инженерии, отделки, доставки и расчётных связей.</p>
       </div>
